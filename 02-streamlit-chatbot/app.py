@@ -60,7 +60,9 @@ if prompt := st.chat_input("Ask me anything"):
         )
         # st.write_stream renders chunks as they arrive and returns the full
         # text at the end -- the sample 1 streaming loop, done for you.
-        reply = st.write_stream(chunk.choices[0].delta.content or "" for chunk in stream if chunk.choices)
+        reply = st.write_stream(
+            chunk.choices[0].delta.content or "" for chunk in stream if chunk.choices
+        )
 
     # 3. append the reply, so it's there for the next turn
     st.session_state.messages.append({"role": "assistant", "content": reply})

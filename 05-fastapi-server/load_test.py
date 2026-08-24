@@ -47,7 +47,7 @@ async def main() -> None:
     async with httpx.AsyncClient(timeout=10) as client:
         try:
             (await client.get(f"{URL}/health")).raise_for_status()
-        except Exception:
+        except httpx.HTTPError:
             sys.exit(f"No server at {URL}. Start it with:  uvicorn server:app")
 
     # How long does one request take with nothing else going on? Everything
@@ -60,7 +60,9 @@ async def main() -> None:
     print(f"  /chat/blocking           {blocking:5.1f}s   ({blocking / baseline:.1f}x one request)")
 
     concurrent = await time_all_at_once("/chat", REQUESTS)
-    print(f"  /chat                    {concurrent:5.1f}s   ({concurrent / baseline:.1f}x one request)")
+    print(
+        f"  /chat                    {concurrent:5.1f}s   ({concurrent / baseline:.1f}x one request)"
+    )
 
     print(f"\n{blocking / concurrent:.1f}x faster. Same model, same machine, same work.")
     print("The blocking server did them one after another; the async one overlapped them.")

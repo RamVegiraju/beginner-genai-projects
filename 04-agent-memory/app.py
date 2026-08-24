@@ -16,14 +16,14 @@ from pathlib import Path
 
 import streamlit as st
 from databricks.sdk import WorkspaceClient
+from distill import distill, remember
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import START, MessagesState, StateGraph
 from langgraph.store.base import BaseStore
 from langgraph.store.sqlite import SqliteStore
-
-from distill import distill, remember
 
 MODEL = os.environ.get("SERVING_ENDPOINT", "databricks-claude-haiku-4-5")
 PROFILE = os.environ.get("DATABRICKS_PROFILE", "DEFAULT")
@@ -81,7 +81,7 @@ def build():
 graph, store, llm = build()
 
 
-def thread_config(thread_id: str) -> dict:
+def thread_config(thread_id: str) -> RunnableConfig:
     return {"configurable": {"thread_id": thread_id}}
 
 

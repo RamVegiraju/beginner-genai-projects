@@ -1,20 +1,25 @@
-"""
-Serving the model as an API.
+"""Chat API over a Databricks serving endpoint.
 
-Two endpoints do exactly the same work, and one of them is roughly N times
-slower under load:
+Two endpoints do identical work, and one of them is roughly N times slower
+under load:
 
-  POST /chat/blocking   async def + the SYNC client. Looks fine. Isn't.
-  POST /chat            async def + the ASYNC client. Handles many at once.
+    POST /chat/blocking   async def + the SYNC client. Looks fine. Isn't.
+    POST /chat            async def + the ASYNC client. Handles many at once.
 
-Run:  uvicorn server:app
-Then, in another terminal:  python load_test.py
+Run:
+    uvicorn server:app
+
+Then, in another terminal:
+    python load_test.py
 """
 
 import os
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
+import openai
 from databricks.sdk import WorkspaceClient
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from openai import AsyncOpenAI, OpenAI
 from pydantic import BaseModel
 
@@ -22,55 +27,96 @@ MODEL = os.environ.get("SERVING_ENDPOINT", "databricks-claude-haiku-4-5")
 PROFILE = os.environ.get("DATABRICKS_PROFILE", "DEFAULT")
 MAX_TOKENS = 150
 
-# Fetched once at startup. Fine for a demo; a long-running service should
-# refresh it, since these tokens are short-lived by design.
-w = WorkspaceClient(profile=PROFILE)
-TOKEN = w.config.authenticate()["Authorization"].removeprefix("Bearer ")
-BASE_URL = f"{w.config.host}/serving-endpoints"
-
-# The same credentials, wrapped in two different clients.
-sync_client = OpenAI(api_key=TOKEN, base_url=BASE_URL)
-async_client = AsyncOpenAI(api_key=TOKEN, base_url=BASE_URL)
-
-app = FastAPI(title="Chat service")
-
 
 class ChatRequest(BaseModel):
+    """A message from the caller."""
+
     message: str
 
 
+class ChatResponse(BaseModel):
+    """The model's reply."""
+
+    reply: str
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Build the clients on startup and close them on shutdown.
+
+    Doing this here rather than at import time keeps the module importable
+    without credentials, and gives the async client somewhere to release its
+    connections when the server stops.
+    """
+    workspace = WorkspaceClient(profile=PROFILE)
+    token = workspace.config.authenticate()["Authorization"].removeprefix("Bearer ")
+    base_url = f"{workspace.config.host}/serving-endpoints"
+
+    # The same credentials, wrapped in two different clients.
+    app.state.sync_client = OpenAI(api_key=token, base_url=base_url)
+    app.state.async_client = AsyncOpenAI(api_key=token, base_url=base_url)
+
+    yield
+
+    app.state.sync_client.close()
+    await app.state.async_client.close()
+
+
+app = FastAPI(title="Chat service", lifespan=lifespan)
+
+
 @app.get("/health")
-async def health() -> dict:
+async def health() -> dict[str, str]:
+    """Report that the server is up and which model it will call."""
     return {"status": "ok", "model": MODEL}
 
 
 @app.post("/chat/blocking")
-async def chat_blocking(request: ChatRequest) -> dict:
-    """The mistake: `async def` with a blocking call inside it.
+async def chat_blocking(body: ChatRequest, request: Request) -> ChatResponse:
+    """Answer a message, one caller at a time.
 
-    A model call spends almost all its time waiting on the network. Nothing
-    here is awaited, so the server cannot start anyone else's request during
-    that wait -- callers queue up behind each other one at a time.
+    This is the mistake: `async def` with a blocking call inside it. A model
+    call spends almost all its time waiting on the network, and nothing here
+    is awaited, so the server cannot start anyone else's request during that
+    wait. Callers queue up behind each other.
+
+    Raises:
+        HTTPException: 502 if the serving endpoint rejects the call.
     """
-    response = sync_client.chat.completions.create(
-        model=MODEL,
-        messages=[{"role": "user", "content": request.message}],
-        max_tokens=MAX_TOKENS,
-    )
-    return {"reply": response.choices[0].message.content}
+    client: OpenAI = request.app.state.sync_client
+    try:
+        response = client.chat.completions.create(
+            model=MODEL,
+            messages=[{"role": "user", "content": body.message}],
+            max_tokens=MAX_TOKENS,
+        )
+    except openai.OpenAIError as exc:
+        raise HTTPException(status_code=502, detail=f"Model call failed: {exc}") from exc
+
+    # content is optional in the API schema, so fall back to an empty string.
+    return ChatResponse(reply=response.choices[0].message.content or "")
 
 
 @app.post("/chat")
-async def chat(request: ChatRequest) -> dict:
-    """The fix: an async client, and `await`.
+async def chat(body: ChatRequest, request: Request) -> ChatResponse:
+    """Answer a message, many callers at once.
 
-    `await` means "I am waiting -- go do something else." The server starts
-    the next request instead of sitting idle, so all of them are in flight
-    together. Still one process, still one thread.
+    The fix is the async client and `await`. `await` means "I am waiting, go
+    do something else", so the server starts the next request instead of
+    sitting idle. Still one process, still one thread.
+
+    Raises:
+        HTTPException: 502 if the serving endpoint rejects the call.
     """
-    response = await async_client.chat.completions.create(
-        model=MODEL,
-        messages=[{"role": "user", "content": request.message}],
-        max_tokens=MAX_TOKENS,
-    )
-    return {"reply": response.choices[0].message.content}
+    client: AsyncOpenAI = request.app.state.async_client
+    try:
+        response = await client.chat.completions.create(
+            model=MODEL,
+            messages=[{"role": "user", "content": body.message}],
+            max_tokens=MAX_TOKENS,
+        )
+    except openai.OpenAIError as exc:
+        raise HTTPException(status_code=502, detail=f"Model call failed: {exc}") from exc
+
+    # content is optional in the API schema, so fall back to an empty string.
+    return ChatResponse(reply=response.choices[0].message.content or "")
