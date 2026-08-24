@@ -2,3 +2,4 @@ databricks-sdk>=0.133.0
 langchain-openai>=1.0.0
 langgraph>=1.0.0
 langgraph-checkpoint-sqlite>=3.0.0
+streamlit>=1.40.0

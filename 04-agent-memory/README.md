@@ -1,90 +1,81 @@
 # 4 — Memory
 
-**The wall:** sample 2 held the conversation in RAM and sample 3 rebuilt state
-on every run. Both forget you the moment the process ends.
+**The wall:** sample 2's chatbot kept the conversation in a Python list, so
+closing the tab erased you. Sample 3 rebuilt state from scratch on every run.
 
-"Remember me" turns out to be two different problems, and this sample builds
-both:
+This is the same chatbot as sample 2, with the memory moved to disk — and it
+turns out "remember me" is really two different problems:
 
 | | Short-term | Long-term |
 |---|---|---|
-| **Question it answers** | "What did I just say?" | "How do you like your answers?" |
+| **Answers** | "What did I just say?" | "How do you like your answers?" |
 | **Scoped to** | one conversation (`thread_id`) | one person (`user_id`) |
-| **Mechanism** | checkpointer — saves state every step | store — key/value facts |
-| **Written by** | LangGraph, automatically | `distill.py`, deliberately |
-| **Grows** | forever, and you pay for it | barely |
-
-Both tables live in one file, `memory.db`. Delete it and the bot forgets you
-entirely.
+| **Mechanism** | checkpointer — saves state every step | store — a few key/value facts |
+| **Written by** | LangGraph, automatically | you, by hitting **Distill** |
+| **Grows** | forever, and you pay for it every turn | barely |
 
 ## Run it
 
 ```bash
 pip install -r requirements.txt
-
-python chat.py trip     # tell it something about yourself, Ctrl-D to exit
-python chat.py trip     # SAME thread -- the conversation is still there
+streamlit run app.py
 ```
 
-The second run is the point. The process died completely in between, and it
-still knows what you said. That is the checkpointer: `thread_id` is the key,
-and LangGraph loads and saves state around every turn for you. Note that
-`chat.py` sends **one** message per turn — sample 2 had to resend the whole
-list by hand.
+`app.py` is the only thing you run. `distill.py` is a two-function module it
+imports — worth reading, nothing to execute.
 
-```bash
-python distill.py trip  # read the transcript, keep what's durable
-python chat.py brand-new-thread
-```
+**Watch the sidebar.** It shows both memories at once, which is the whole
+point: one of them empties when you switch threads and the other doesn't.
 
-Now the interesting part. The new thread has **zero** messages in it — ask
-what you talked about and it has no idea — but it still knows you're
-vegetarian. Short-term memory was left behind; long-term memory came along.
+1. Say *"I'm vegetarian and I live in Seattle. Keep answers short."*
+2. The message count climbs. That list is resent on every single turn.
+3. Hit **Distill**. The conversation collapses into two or three facts.
+4. Hit **New thread**. Messages drop to 0. The facts stay.
+5. Ask *"What should I cook tonight?"*
 
-A real run:
+Step 5 is the payoff. The thread is empty — it has never met you — and it
+answers with *"quick vegetarian ideas for Seattle"*. Short-term memory was
+left behind; long-term memory came along.
 
-```
-$ python distill.py trip
-reading 6 messages from thread 'trip'...
-
-  remembered: They are vegetarian.
-  remembered: They live in Seattle.
-  remembered: They prefer short answers of one or two sentences maximum.
-
-6 messages -> 3 facts.
-```
-
-Six messages became three lines. It kept the dietary need and dropped the
-dinner it recommended — that was about the topic, not about the person.
+Then stop the server and start it again. Your conversation is still there,
+because `thread_id` is a key in a SQLite file rather than a variable in RAM.
 
 ## What distillation actually is
 
-The whole skill sits in one prompt in `distill.py`, and one word in it does
-the work: *durable*. "Facts that would still be true in a different
-conversation next month" is the line between a preference and a passing
-detail.
+The whole skill sits in one prompt in `distill.py`, and one word does the
+work: **durable**. "Facts that would still be true in a different conversation
+next month" is the line between a preference and a passing detail. In testing
+it kept *vegetarian* and dropped the dinner it had just recommended.
 
-Worth saying out loud: this is a model summarising a model's output, then
-writing the result into the next conversation's system prompt. It is a
-judgement call, not a database write. It will sometimes keep the wrong thing,
-and then be confidently wrong about you for months. Read what it stored — the
-sample prints the facts on every startup for exactly that reason.
+Worth saying out loud on camera: this is a model summarising a model's output,
+and the result gets pasted into every future conversation. It is a judgement
+call, not a database write. It will sometimes keep the wrong thing and then be
+confidently wrong about you for months — which is why the sidebar shows you
+exactly what it thinks it knows, and why **Forget me** is a button.
 
-## Why the system prompt is built inside the node
+## Three things in the code worth pausing on
 
-`agent()` reads preferences and constructs the system message on every turn,
-then throws it away. It never enters state, so it is never checkpointed.
+**The system prompt is built inside the node and thrown away.** It never
+enters state, so it is never checkpointed. Do the obvious thing instead —
+prepend it once at startup — and your preferences get frozen into the first
+checkpoint, so old threads keep quoting a stale version of you. Memory you
+cannot correct is worse than no memory.
 
-If you did the obvious thing instead — prepend the system message once at
-startup — it would be saved into the thread's history on the first turn and
-frozen there. Update a preference and old threads would keep quoting the old
-one. Memory you cannot correct is worse than no memory.
+**The parameter is named `store` on purpose.** LangGraph injects it by
+matching the parameter *name*, and by checking the annotation is `BaseStore`.
+Annotate it `SqliteStore` and you silently get nothing.
+
+**Two connections to one file.** The checkpointer and the store can share
+`memory.db` but not a connection — the store runs in autocommit and the saver
+doesn't, so sharing raises *"cannot start a transaction within a
+transaction"*. Both need `check_same_thread=False`, because Streamlit runs
+the script on one thread and LangGraph writes checkpoints from another.
 
 ## Deliberately local
 
-Plain SQLite on disk. No Lakebase, no external store, one file you can
-`rm`. Swapping in `PostgresSaver` is a two-line change when you need it; the
+Plain SQLite on disk. No Lakebase, no external store, one file you can `rm`.
+Swapping in `PostgresSaver` is a two-line change when you need it; the
 concepts — `thread_id`, `user_id`, checkpointer, store — do not change at all.
 
-**Ends on:** all of this works for one user, one process, one at a time.
+**Ends on:** all of this serves one user, in one process, one at a time.
 → sample 5.
