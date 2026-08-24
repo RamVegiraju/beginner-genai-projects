@@ -18,7 +18,7 @@ Each sample exists because the previous one hit a wall.
 | 3 | [LangGraph agent](03-langgraph-agent/) | The model can't know today's weather. Give it tools. |
 | 4 | [Memory](04-agent-memory/) | Close the tab and it forgets you. Persist the conversation, and distill what's worth keeping about the person. |
 | 5 | [FastAPI server](05-fastapi-server/) | One user at a time doesn't scale. Serve many at once. |
-| 6 | MLflow evals | "It seems good" isn't a quality bar. Measure it. |
+| 6 | [MLflow evals](06-mlflow-evals/) | "It seems good" isn't a quality bar. Measure it. |
 
 ## Status
 
@@ -27,7 +27,9 @@ Each sample exists because the previous one hit a wall.
 - **Sample 3 — built and tested** against a live workspace.
 - **Sample 4 — built and tested** against a live workspace.
 - **Sample 5 — built and tested** against a live workspace.
-- Sample 6 — scaffolded, not yet written.
+- **Sample 6 — built and tested** against a live workspace.
+
+All six samples are complete.
 
 ## Setup
 
