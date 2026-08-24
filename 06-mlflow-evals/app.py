@@ -1,42 +1,84 @@
-"""The app we are going to measure: support for a fictional coffee subscription.
+"""The app we are going to measure: a support agent with one tool.
 
-Two versions of the same app that differ only in the system prompt. Sample 6
-asks which one is actually better, and answers with numbers instead of vibes.
+It answers questions about orders. Anything about a specific order has to come
+from the `look_up_order` tool -- the model has no way to know it otherwise.
+
+Two versions differ only in the system prompt, so sample 6 can ask whether the
+change actually helped.
 
 Run this file directly to send one question through and record a trace.
 """
 
 import functools
+import json
 import os
 
 import mlflow
 from databricks.sdk import WorkspaceClient
+from mlflow.entities import SpanType
 from mlflow.openai import autolog as trace_openai_calls
 from openai import OpenAI
 
 MODEL = os.environ.get("SERVING_ENDPOINT", "databricks-claude-haiku-4-5")
 PROFILE = os.environ.get("DATABRICKS_PROFILE", "genai-series")
 
-# Everything the assistant is allowed to know. Anything outside this is a
-# question it should decline rather than invent an answer to.
+# Stands in for the database a real support agent would query.
+ORDERS = {
+    "A1001": {"status": "delivered", "delivered_on": "2026-08-19"},
+    "A1002": {"status": "in transit", "expected_on": "2026-08-27"},
+    "A1003": {"status": "preparing", "ships_on": "2026-09-01"},
+}
+
 POLICY = """Bean Box policy:
-- Refunds: request within 30 days of delivery for a full refund. Customers do
-  not need to return the coffee.
+- Refunds: request within 30 days of delivery for a full refund.
 - Shipping: free on orders over $40, otherwise $5.
-- Subscriptions can be paused for up to 3 months from the account page.
 - Orders ship on the first Tuesday of every month."""
 
-# The only difference between the two versions of the app.
 PROMPTS = {
     "v1": f"You are a support agent for Bean Box.\n\n{POLICY}",
     "v2": f"""You are a support agent for Bean Box.
 
-Answer in at most three sentences.
-Use only the policy below. If it does not answer the question, say you do not
-know and offer to pass it to a human. Never guess.
+Never guess the status of an order. Always call look_up_order first, and
+report exactly what it returns. If an order is not found, say so plainly.
+Only answer policy questions from the policy below. Keep replies short.
 
 {POLICY}""",
 }
+
+# What the model is told it can call. The description and parameter names are
+# the model's only instructions for when and how to use it.
+TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "look_up_order",
+            "description": "Look up the current status of a customer order by its ID.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "order_id": {"type": "string", "description": "Order ID, e.g. A1001"}
+                },
+                "required": ["order_id"],
+            },
+        },
+    }
+]
+
+
+# span_type=TOOL is not decoration. MLflow's ToolCallCorrectness scorer finds
+# tool calls by searching a trace for spans of this type -- without it, the
+# scorer sees an agent that never used a tool.
+@mlflow.trace(span_type=SpanType.TOOL)
+def look_up_order(order_id: str) -> dict[str, str]:
+    """Return the status of one order.
+
+    Args:
+        order_id: The ID the customer asked about.
+
+    Returns:
+        The order record, or a not-found marker.
+    """
+    return ORDERS.get(order_id, {"status": "not found"})
 
 
 def configure_mlflow() -> str:
@@ -45,17 +87,22 @@ def configure_mlflow() -> str:
     Returns:
         The experiment name traces and evaluations are written to.
     """
-    # One profile mechanism, used by every client MLflow builds internally.
-    # Setting this AND a databricks://<profile> tracking URI conflicts.
-    os.environ["DATABRICKS_CONFIG_PROFILE"] = PROFILE
+    # Mint one OAuth token up front and hand it to every client MLflow builds
+    # internally. Otherwise each judge shells out to the Databricks CLI for its
+    # own token, and those refreshes collide on the OS keyring under the
+    # evaluation harness's parallelism ("cache update: exit status 45").
+    # The token is short-lived and never written to disk.
+    workspace = WorkspaceClient(profile=PROFILE)
+    os.environ["DATABRICKS_HOST"] = workspace.config.host
+    os.environ["DATABRICKS_TOKEN"] = workspace.config.authenticate()["Authorization"].removeprefix(
+        "Bearer "
+    )
+
     mlflow.set_tracking_uri("databricks")
 
-    user = WorkspaceClient(profile=PROFILE).current_user.me().user_name
+    user = workspace.current_user.me().user_name
     experiment = f"/Users/{user}/beginner-genai-evals"
     mlflow.set_experiment(experiment)
-
-    # Records the model call itself as a span inside each trace, so you can see
-    # the exact prompt that was sent and the tokens it cost.
     trace_openai_calls()
     return experiment
 
@@ -70,31 +117,46 @@ def _client() -> OpenAI:
 
 @mlflow.trace
 def answer(question: str, version: str = "v2") -> dict[str, str]:
-    """Answer a customer question using one version of the system prompt.
-
-    The @mlflow.trace decorator is the whole cost of observability here: every
-    call is recorded with its inputs, outputs, latency, and token usage.
+    """Answer a customer question, calling the order tool if the model asks to.
 
     Args:
         question: What the customer asked.
         version: Which prompt in PROMPTS to use.
 
     Returns:
-        A dict with the assistant's reply under "response".
+        A dict with the agent's reply under "response".
     """
-    response = _client().chat.completions.create(
-        model=MODEL,
-        messages=[
-            {"role": "system", "content": PROMPTS[version]},
-            {"role": "user", "content": question},
-        ],
-        max_tokens=250,
+    client = _client()
+    messages = [
+        {"role": "system", "content": PROMPTS[version]},
+        {"role": "user", "content": question},
+    ]
+
+    first = client.chat.completions.create(
+        model=MODEL, messages=messages, tools=TOOLS, max_tokens=400
     )
-    return {"response": response.choices[0].message.content or ""}
+    reply = first.choices[0].message
+
+    if not reply.tool_calls:
+        return {"response": reply.content or ""}
+
+    # The model asked for the tool. Run it and hand the result back so it can
+    # write the real answer -- the same loop LangGraph ran for us in sample 3.
+    messages.append(reply.model_dump(exclude_none=True))
+    for call in reply.tool_calls:
+        # tool_calls is a union type; only function calls carry .function.
+        if call.type != "function":
+            continue
+        result = look_up_order(**json.loads(call.function.arguments))
+        messages.append({"role": "tool", "tool_call_id": call.id, "content": json.dumps(result)})
+
+    second = client.chat.completions.create(
+        model=MODEL, messages=messages, tools=TOOLS, max_tokens=400
+    )
+    return {"response": second.choices[0].message.content or ""}
 
 
 if __name__ == "__main__":
     experiment = configure_mlflow()
-    result = answer("How long do I have to ask for a refund?", version="v2")
-    print(result["response"])
+    print(answer("Where is my order A1002?", version="v2")["response"])
     print(f"\nTrace recorded in {experiment} — open it in the Databricks UI.")

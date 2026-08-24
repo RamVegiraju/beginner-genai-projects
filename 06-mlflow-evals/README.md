@@ -5,18 +5,27 @@ You changed the prompt. Did it get better?
 "It seems good" is how most GenAI projects quietly fail. This sample measures
 the answer instead, using Databricks-managed MLflow.
 
+The app is a support agent with one tool, `look_up_order`. Anything about a
+specific order has to come from that tool — the model cannot know it otherwise.
+
 ## What this sample showcases
 
 **1. Tracing is one decorator.** `@mlflow.trace` records every call — inputs,
-outputs, latency, tokens — and you can open any of them in the Databricks UI.
+outputs, latency, tokens, and each tool call — and you can open any of them in
+the Databricks UI.
 
-**2. An eval set is just a list of questions and expected facts.** Hand-written,
-small, and the most valuable thing in this folder.
+**2. Three kinds of scorer**, because they answer different questions and cost
+different amounts:
 
-**3. LLM judges do the scoring.** Built-in scorers read each answer and decide
-whether it is correct, relevant, and follows your rules.
+| Scorer | Kind | Asks | Cost |
+|---|---|---|---|
+| `ToolCallCorrectness` | built-in | Did it call the right tool with the right arguments? | an LLM call |
+| `grounded_in_lookup` | your code | Does the reply match what the tool returned? | free |
+| `helpfulness` | your LLM judge | Was this a good support reply, 1–5? | an LLM call |
 
-**4. Two prompts, same questions, real numbers.** That is the whole point.
+**3. You do not always need labelled data.** None of these three need a
+written-out correct answer, which matters — ground truth is the expensive part
+of an eval set.
 
 ## Setup
 
@@ -37,8 +46,8 @@ cd 06-mlflow-evals
 ../.venv/bin/python app.py
 ```
 
-Open the experiment it prints in the Databricks UI. You will see the call, the
-exact prompt that was sent, and the tokens it cost. **Do this before scoring
+Open the experiment it prints. You will see the model call, the tool call with
+its arguments and result, and the tokens it cost. **Do this before scoring
 anything** — you cannot debug what you cannot see.
 
 Then score both prompt versions:
@@ -48,69 +57,90 @@ Then score both prompt versions:
 ```
 
 ```
-==============================================
-metric                          v1        v2
-----------------------------------------------
-concise/mean                  0.00      1.00
-correctness/mean              1.00      0.80
-relevance_to_query/mean       1.00      1.00
-==============================================
+====================================================
+metric                                v1        v2
+----------------------------------------------------
+grounded_in_lookup/mean             1.00      1.00
+helpfulness/mean                    4.75      4.50
+tool_call_correctness/mean          0.75      0.75
+====================================================
 ```
 
-The two prompts differ only in a few added instructions, and conciseness went
-from 0.00 to 1.00. That is a real answer instead of "it felt better".
+**Your numbers will not match exactly.** Two of the three scorers are LLM
+judges, so they are not deterministic. On four questions a single changed
+judgement is worth 0.25, so treat small gaps as noise and add rows before
+trusting a close call.
 
-**Your numbers will not match exactly.** The judges are LLMs, so they are not
-deterministic — across runs, `concise` for v2 landed between 0.80 and 1.00 and
-`correctness` moved between 0.80 and 1.00 for both versions. On five
-questions, one judgement changing is worth 0.20, so treat a small gap as
-noise. What holds up across every run is the big one: v1 scores 0.00 on
-conciseness, every time.
+And read this table honestly: **v2 did not beat v1.** The stricter prompt
+changed nothing measurable and scored slightly lower on helpfulness, because
+it is terser. That is a real result, and knowing it before you ship beats
+believing the change helped.
 
-That is the real lesson about eval sets: a handful of questions tells you
-about large differences, not small ones. Add rows before you trust a
-close call.
+## The three scorers
 
-## The question that shows why this matters
+### Built-in: `ToolCallCorrectness`
 
-Both versions are asked something the policy does not cover: *"Can I change
-the grind size on my subscription?"*
+Reads the trace, finds the tool calls, and judges whether they were the right
+ones. It finds them by searching for spans of type `TOOL`, which is why the
+tool in `app.py` is decorated:
 
-**v1** admits it does not know, and then invents guidance anyway:
+```python
+@mlflow.trace(span_type=SpanType.TOOL)
+def look_up_order(order_id: str) -> dict[str, str]: ...
+```
 
-> I don't have specific information about changing grind size... **Checking
-> your account page** — you may be able to modify grind size settings directly
+Without that `span_type`, the scorer sees an agent that never used a tool.
 
-Nothing in the policy says that. **v2**:
+### Your code: `grounded_in_lookup`
 
-> I don't know the answer to that question based on our policy information.
-> Let me pass this to a human agent who can help.
+Plain Python. No model call, no cost, same answer every time. If a check can
+be written this way, write it this way and save the judges for things that
+need judgement.
 
-One of those creates a support ticket. Scores make the difference visible
-across every question at once, instead of one you happened to try by hand.
+Code scorers are *literal*, though. The first version of this one looked for
+the string `"not found"` in the reply — and scored a perfectly good *"I'm
+unable to find order B9999"* as a failure. It now checks the two cases
+separately: a real status must be repeated, and a missing order must not have
+a status invented for it.
 
-## The scorers
+### Your LLM judge: `helpfulness`
 
-| Scorer | Asks | Needs ground truth? |
-|---|---|---|
-| `Correctness` | Does the answer contain the expected facts? | Yes — `expected_facts` |
-| `RelevanceToQuery` | Does it address the question at all? | No |
-| `Guidelines` | Does it follow a rule you wrote? | No |
+`make_judge` takes plain instructions with `{{ inputs }}` and `{{ outputs }}`
+placeholders, and a `feedback_value_type` — here `int`, for a 1–5 rating.
+Use this for what code cannot decide: tone, clarity, whether the customer
+actually knows what to do next.
 
-`Guidelines` is the flexible one: give it a `name` and a plain-English rule.
-It sees the `request` and the `response`, so write rules about those.
+## A judge that is wrong, on purpose
+
+`tool_call_correctness` sits at 0.75 for both versions. The failure is the
+policy question, *"How long do I have to return something?"* — the agent
+correctly answered from policy without touching the tool, and the judge marked
+it wrong:
+
+> the agent did not call any tools. The available tool, 'look_up_order', is
+> relevant because...
+
+Without ground truth this scorer treats "called nothing" as a miss. You can
+pin it down by adding `expectations={"expected_tool_calls": [...]}` per row —
+but note an **empty list is read as "no expectations given"**, so there is no
+way to state "correctly called nothing".
+
+Keep this one in mind. A score is where you start looking, not the answer.
+Open the rationale, which is why the sample pairs LLM judges with a cheap
+deterministic scorer that cannot be talked into anything.
+
+`ToolCallCorrectness` is also marked **Experimental** in MLflow 3.15 and may
+change.
 
 ## Notes
 
-- **Judges are LLM calls.** Every score costs a model call, so a 5-question
-  eval set with 3 scorers is 15 judgements per run. Keep eval sets small and
-  focused on what you actually care about.
-- **If scorers fail with `cache update: exit status 45`,** your OAuth token
-  needs refreshing. Each judge asks the Databricks CLI for a token, and a
-  stale login makes those concurrent refreshes collide. Fix it at the source:
-  `databricks auth login --host <your-workspace> --profile genai-series`.
-- **Results live in your workspace**, not on disk. Everything is written to an
-  MLflow experiment under your user folder.
+- **Judges are LLM calls.** Four questions, three scorers, two versions is 24
+  judgements per run. Keep eval sets small and pointed.
+- **One token is minted up front** in `configure_mlflow()` and shared. Without
+  it every judge shells out to the Databricks CLI, and those concurrent
+  refreshes collide on the OS keyring (`cache update: exit status 45`).
+- **Results live in your workspace**, not on disk, under an MLflow experiment
+  in your user folder.
 
 ## Next
 
