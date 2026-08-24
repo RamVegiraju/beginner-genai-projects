@@ -1,17 +1,15 @@
-# 6 — Evaluation with MLflow
+# 6 — Evaluating with MLflow
 
-> **Not built yet.** Design notes only.
+> **Not built yet.**
 
-**The wall:** you changed the prompt. Did it get better? "It seems good" is
-not an answer, and it's how most GenAI projects quietly fail.
+You changed the prompt. Did it get better? This sample measures the answer
+instead of guessing at it.
 
-Planned:
-- **Tracing first** — `mlflow.langchain.autolog()`, then open a trace and see
-  every step of the sample 3 agent: prompts, tool calls, tokens, latency.
-  Tracing is the debugging superpower; it should land before scoring does.
-- **Then evals** — a small hand-written eval set (10–20 rows), scored with
-  `mlflow.genai.evaluate()` and built-in judges (correctness, groundedness)
-- Compare two prompt versions side by side and let the scores decide
+Will cover:
 
-**The point:** you cannot improve what you cannot measure — and you cannot
-debug what you cannot see.
+- **Tracing** — `mlflow.langchain.autolog()`, then open a trace and see every
+  step of the agent: prompts, tool calls, tokens, latency
+- **Eval sets** — a small hand-written set of questions and expected answers
+- **Scoring** — `mlflow.genai.evaluate()` with built-in judges for correctness
+  and groundedness
+- Comparing two prompt versions and letting the scores decide

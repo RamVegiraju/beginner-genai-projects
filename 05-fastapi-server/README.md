@@ -1,20 +1,14 @@
-# 5 — Serving it: an agent is a systems problem
+# 5 — Serving it with FastAPI
 
-> **Not built yet.** Design notes only.
+> **Not built yet.**
 
-**The wall:** Streamlit runs your agent for one person. What happens when
-fifty people hit it at once?
+Streamlit runs your agent for one person at a time. This sample turns it into
+a service that many people can call at once.
 
-This is the mindset shift the series builds toward: an agent isn't a script,
-it's a **service** — with latency, concurrency, and failure modes.
+Will cover:
 
-Planned:
 - `server.py` — FastAPI wrapping the sample 4 agent
-- `async def` endpoints + the async OpenAI client, so slow model calls don't
-  block the event loop
-- `/chat` (JSON) and `/chat/stream` (SSE)
-- `thread_id` in the request body → per-user memory falls out of sample 4
-- `load_test.py` — fire N concurrent requests, show sync vs async wall-clock
-
-**The demo that sells it:** the same workload, blocking vs async. The numbers
-make the point better than any explanation.
+- `async` endpoints, so a slow model call doesn't block everyone else
+- `/chat` for JSON and `/chat/stream` for server-sent events
+- `thread_id` in the request body, so each caller keeps their own memory
+- `load_test.py` — the same workload run blocking and async, side by side

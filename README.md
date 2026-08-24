@@ -16,7 +16,7 @@ Each sample exists because the previous one hit a wall.
 | 1 | [Talking to an LLM](01-first-llm-call/) | How do you call a model at all? Streaming vs non-streaming. |
 | 2 | [Streamlit chatbot](02-streamlit-chatbot/) | One question isn't a conversation, and a script isn't a product. |
 | 3 | [LangGraph agent](03-langgraph-agent/) | The model can't know today's weather. Give it tools. |
-| 4 | [Memory](04-agent-memory/) | Close the tab and it forgets you. Persist a conversation, then distill what's worth keeping about the person. |
+| 4 | [Memory](04-agent-memory/) | Close the tab and it forgets you. Persist the conversation, and distill what's worth keeping about the person. |
 | 5 | FastAPI server | One user at a time doesn't scale. Agents are a systems problem. |
 | 6 | MLflow evals | "It seems good" isn't a quality bar. Measure it. |
 
@@ -36,7 +36,11 @@ first sample. About five minutes, once for the whole series.
 The short version, if you already have the Databricks CLI:
 
 ```bash
-databricks auth login --host https://<your-workspace>.cloud.databricks.com
+databricks auth login \
+  --host https://<your-workspace>.cloud.databricks.com \
+  --profile genai-series
+export DATABRICKS_PROFILE=genai-series
+
 uv venv --python 3.12 .venv
 uv pip install --python .venv/bin/python -r 01-first-llm-call/requirements.txt
 cd 01-first-llm-call && ../.venv/bin/python invoke.py
@@ -47,13 +51,14 @@ Each sample has its own `requirements.txt` and its own README. Start with
 
 ## Configuration
 
-Two optional environment variables, used by every sample. Copy `.env.example`
-to `.env` if your setup differs from the defaults.
+All optional. Copy `.env.example` to `.env` if your setup differs from the
+defaults.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `DATABRICKS_PROFILE` | `DEFAULT` | Which profile in `~/.databrickscfg`. [SETUP.md](SETUP.md) has you create a named profile — export this to point at it. |
+| `DATABRICKS_PROFILE` | `DEFAULT` | Which profile in `~/.databrickscfg`. [SETUP.md](SETUP.md) has you create `genai-series` — export this to point at it. |
 | `SERVING_ENDPOINT` | `databricks-claude-haiku-4-5` | Which model to call |
+| `USER_ID` | `demo-user` | Who long-term memory belongs to (sample 4) |
 
 ## A note on credentials
 
