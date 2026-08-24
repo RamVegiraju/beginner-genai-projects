@@ -14,9 +14,9 @@ Each sample exists because the previous one hit a wall.
 | # | Sample | The wall it solves |
 |---|---|---|
 | 1 | [Talking to an LLM](01-first-llm-call/) | How do you call a model at all? Streaming vs non-streaming. |
-| 2 | Streamlit chatbot | One question isn't a conversation, and a script isn't a product. |
-| 3 | LangGraph agent | The model can't know today's weather. Give it tools. |
-| 4 | Memory | Close the tab and it forgets you. Persist across sessions. |
+| 2 | [Streamlit chatbot](02-streamlit-chatbot/) | One question isn't a conversation, and a script isn't a product. |
+| 3 | [LangGraph agent](03-langgraph-agent/) | The model can't know today's weather. Give it tools. |
+| 4 | [Memory](04-agent-memory/) | Close the tab and it forgets you. Persist a conversation, then distill what's worth keeping about the person. |
 | 5 | FastAPI server | One user at a time doesn't scale. Agents are a systems problem. |
 | 6 | MLflow evals | "It seems good" isn't a quality bar. Measure it. |
 
@@ -25,7 +25,8 @@ Each sample exists because the previous one hit a wall.
 - **Sample 1 — built and tested** against a live workspace.
 - **Sample 2 — built and tested** against a live workspace.
 - **Sample 3 — built and tested** against a live workspace.
-- Samples 4–6 — scaffolded, not yet written.
+- **Sample 4 — built and tested** against a live workspace.
+- Samples 5–6 — scaffolded, not yet written.
 
 ## Setup
 
