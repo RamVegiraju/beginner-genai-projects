@@ -17,7 +17,7 @@ Each sample exists because the previous one hit a wall.
 | 2 | [Streamlit chatbot](02-streamlit-chatbot/) | One question isn't a conversation, and a script isn't a product. |
 | 3 | [LangGraph agent](03-langgraph-agent/) | The model can't know today's weather. Give it tools. |
 | 4 | [Memory](04-agent-memory/) | Close the tab and it forgets you. Persist the conversation, and distill what's worth keeping about the person. |
-| 5 | FastAPI server | One user at a time doesn't scale. Agents are a systems problem. |
+| 5 | [FastAPI server](05-fastapi-server/) | One user at a time doesn't scale. Serve many at once. |
 | 6 | MLflow evals | "It seems good" isn't a quality bar. Measure it. |
 
 ## Status
@@ -26,7 +26,8 @@ Each sample exists because the previous one hit a wall.
 - **Sample 2 — built and tested** against a live workspace.
 - **Sample 3 — built and tested** against a live workspace.
 - **Sample 4 — built and tested** against a live workspace.
-- Samples 5–6 — scaffolded, not yet written.
+- **Sample 5 — built and tested** against a live workspace.
+- Sample 6 — scaffolded, not yet written.
 
 ## Setup
 
