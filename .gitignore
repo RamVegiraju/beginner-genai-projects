@@ -1,0 +1,15 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.env
+.databrickscfg
+*.pem
+*.db
+*.sqlite
+*.sqlite3
+.streamlit/secrets.toml
+mlruns/
+mlartifacts/
+.DS_Store
+.ipynb_checkpoints/
