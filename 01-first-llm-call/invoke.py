@@ -38,7 +38,8 @@ response = client.chat.completions.create(
 )
 
 print(response.choices[0].message.content)
-print(f"\n[{response.usage.total_tokens} tokens]")
+if response.usage:
+    print(f"\n[{response.usage.total_tokens} tokens]")
 
 
 # --- Streaming: take the tokens as they're generated ------------------------
