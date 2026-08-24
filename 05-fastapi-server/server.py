@@ -1,10 +1,15 @@
-"""Chat API over a Databricks serving endpoint.
+"""Serving a LangGraph agent over FastAPI, asynchronously.
 
-Two endpoints do identical work, and one of them is roughly N times slower
-under load:
+Agent inference is almost all waiting: the model is thinking, the tool is
+calling an API, the network is in flight. Async is how one process serves many
+callers through all that waiting instead of one at a time.
 
-    POST /chat/blocking   async def + the SYNC client. Looks fine. Isn't.
-    POST /chat            async def + the ASYNC client. Handles many at once.
+LangGraph gives every compiled graph an async twin of each method, so there is
+nothing to hand-roll:
+
+    await graph.ainvoke(...)    one request
+    await graph.abatch([...])   many at once, concurrently
+    async for ... graph.astream(...)   tokens as they are produced
 
 Run:
     uvicorn server:app
@@ -13,6 +18,7 @@ Then, in another terminal:
     python load_test.py
 """
 
+import json
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -20,7 +26,11 @@ from contextlib import asynccontextmanager
 import openai
 from databricks.sdk import WorkspaceClient
 from fastapi import FastAPI, HTTPException, Request
-from openai import AsyncOpenAI, OpenAI
+from fastapi.responses import StreamingResponse
+from langchain_core.messages import HumanMessage
+from langchain_openai import ChatOpenAI
+from langgraph.graph import START, MessagesState, StateGraph
+from langgraph.graph.state import CompiledStateGraph
 from pydantic import BaseModel
 
 MODEL = os.environ.get("SERVING_ENDPOINT", "databricks-claude-haiku-4-5")
@@ -34,35 +44,63 @@ class ChatRequest(BaseModel):
     message: str
 
 
+class BatchRequest(BaseModel):
+    """Several messages to answer in one call."""
+
+    messages: list[str]
+
+
 class ChatResponse(BaseModel):
-    """The model's reply."""
+    """The agent's reply."""
 
     reply: str
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Build the clients on startup and close them on shutdown.
+class BatchResponse(BaseModel):
+    """One reply per message, in the order they were sent."""
 
-    Doing this here rather than at import time keeps the module importable
-    without credentials, and gives the async client somewhere to release its
-    connections when the server stops.
+    replies: list[str]
+
+
+def build_graph() -> CompiledStateGraph:
+    """Compile the agent. One node, and it awaits.
+
+    The node is `async def` and awaits the model. That is what lets the server
+    start someone else's request while this one is waiting.
     """
     workspace = WorkspaceClient(profile=PROFILE)
     token = workspace.config.authenticate()["Authorization"].removeprefix("Bearer ")
-    base_url = f"{workspace.config.host}/serving-endpoints"
+    llm = ChatOpenAI(
+        model=MODEL,
+        api_key=token,
+        base_url=f"{workspace.config.host}/serving-endpoints",
+        max_tokens=MAX_TOKENS,
+    )
 
-    # The same credentials, wrapped in two different clients.
-    app.state.sync_client = OpenAI(api_key=token, base_url=base_url)
-    app.state.async_client = AsyncOpenAI(api_key=token, base_url=base_url)
+    async def agent(state: MessagesState) -> dict:
+        return {"messages": [await llm.ainvoke(state["messages"])]}
 
+    return StateGraph(MessagesState).add_node("agent", agent).add_edge(START, "agent").compile()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Compile the graph on startup rather than at import time.
+
+    Keeps the module importable without credentials, and gives the app one
+    place to hold shared state.
+    """
+    app.state.graph = build_graph()
     yield
 
-    app.state.sync_client.close()
-    await app.state.async_client.close()
+
+app = FastAPI(title="Agent service", lifespan=lifespan)
 
 
-app = FastAPI(title="Chat service", lifespan=lifespan)
+def _text(state: dict) -> str:
+    """Pull the last message out of the graph's final state."""
+    content = state["messages"][-1].content
+    return content if isinstance(content, str) else str(content)
 
 
 @app.get("/health")
@@ -71,52 +109,57 @@ async def health() -> dict[str, str]:
     return {"status": "ok", "model": MODEL}
 
 
-@app.post("/chat/blocking")
-async def chat_blocking(body: ChatRequest, request: Request) -> ChatResponse:
-    """Answer a message, one caller at a time.
-
-    This is the mistake: `async def` with a blocking call inside it. A model
-    call spends almost all its time waiting on the network, and nothing here
-    is awaited, so the server cannot start anyone else's request during that
-    wait. Callers queue up behind each other.
-
-    Raises:
-        HTTPException: 502 if the serving endpoint rejects the call.
-    """
-    client: OpenAI = request.app.state.sync_client
-    try:
-        response = client.chat.completions.create(
-            model=MODEL,
-            messages=[{"role": "user", "content": body.message}],
-            max_tokens=MAX_TOKENS,
-        )
-    except openai.OpenAIError as exc:
-        raise HTTPException(status_code=502, detail=f"Model call failed: {exc}") from exc
-
-    # content is optional in the API schema, so fall back to an empty string.
-    return ChatResponse(reply=response.choices[0].message.content or "")
-
-
 @app.post("/chat")
 async def chat(body: ChatRequest, request: Request) -> ChatResponse:
-    """Answer a message, many callers at once.
-
-    The fix is the async client and `await`. `await` means "I am waiting, go
-    do something else", so the server starts the next request instead of
-    sitting idle. Still one process, still one thread.
+    """Answer one message.
 
     Raises:
         HTTPException: 502 if the serving endpoint rejects the call.
     """
-    client: AsyncOpenAI = request.app.state.async_client
+    graph: CompiledStateGraph = request.app.state.graph
     try:
-        response = await client.chat.completions.create(
-            model=MODEL,
-            messages=[{"role": "user", "content": body.message}],
-            max_tokens=MAX_TOKENS,
+        state = await graph.ainvoke({"messages": [HumanMessage(body.message)]})
+    except openai.OpenAIError as exc:
+        raise HTTPException(status_code=502, detail=f"Model call failed: {exc}") from exc
+    return ChatResponse(reply=_text(state))
+
+
+@app.post("/chat/batch")
+async def chat_batch(body: BatchRequest, request: Request) -> BatchResponse:
+    """Answer several messages concurrently.
+
+    `abatch` runs them all at once and returns them in order -- the same thing
+    asyncio.gather would do by hand, minus the hand.
+
+    Raises:
+        HTTPException: 502 if the serving endpoint rejects the call.
+    """
+    graph: CompiledStateGraph = request.app.state.graph
+    try:
+        states = await graph.abatch(
+            [{"messages": [HumanMessage(message)]} for message in body.messages]
         )
     except openai.OpenAIError as exc:
         raise HTTPException(status_code=502, detail=f"Model call failed: {exc}") from exc
+    return BatchResponse(replies=[_text(state) for state in states])
 
-    # content is optional in the API schema, so fall back to an empty string.
-    return ChatResponse(reply=response.choices[0].message.content or "")
+
+@app.post("/chat/stream")
+async def chat_stream(body: ChatRequest, request: Request) -> StreamingResponse:
+    """Answer one message, sending tokens as they are produced.
+
+    Server-sent events. The caller sees the first words immediately instead of
+    waiting for the whole reply -- the same idea as sample 1's streaming, now
+    over HTTP.
+    """
+    graph: CompiledStateGraph = request.app.state.graph
+
+    async def events() -> AsyncIterator[str]:
+        async for chunk, _metadata in graph.astream(
+            {"messages": [HumanMessage(body.message)]}, stream_mode="messages"
+        ):
+            if chunk.content:
+                yield f"data: {json.dumps({'token': chunk.content})}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(events(), media_type="text/event-stream")

@@ -1,7 +1,8 @@
-"""The app we are going to measure: a support agent with one tool.
+"""The app we are going to measure: a LangGraph support agent with one tool.
 
-It answers questions about orders. Anything about a specific order has to come
-from the `look_up_order` tool -- the model has no way to know it otherwise.
+Same graph as sample 3 -- model, tool, loop -- pointed at order lookups
+instead of weather. Anything about a specific order has to come from the
+`look_up_order` tool, because the model has no other way to know it.
 
 Two versions differ only in the system prompt, so sample 6 can ask whether the
 change actually helped.
@@ -10,14 +11,16 @@ Run this file directly to send one question through and record a trace.
 """
 
 import functools
-import json
 import os
 
 import mlflow
 from databricks.sdk import WorkspaceClient
-from mlflow.entities import SpanType
-from mlflow.openai import autolog as trace_openai_calls
-from openai import OpenAI
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.tools import tool
+from langchain_openai import ChatOpenAI
+from langgraph.graph import START, MessagesState, StateGraph
+from langgraph.prebuilt import ToolNode, tools_condition
+from mlflow.langchain import autolog as trace_langchain_calls
 
 MODEL = os.environ.get("SERVING_ENDPOINT", "databricks-claude-haiku-4-5")
 PROFILE = os.environ.get("DATABRICKS_PROFILE", "genai-series")
@@ -45,39 +48,10 @@ Only answer policy questions from the policy below. Keep replies short.
 {POLICY}""",
 }
 
-# What the model is told it can call. The description and parameter names are
-# the model's only instructions for when and how to use it.
-TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "look_up_order",
-            "description": "Look up the current status of a customer order by its ID.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "order_id": {"type": "string", "description": "Order ID, e.g. A1001"}
-                },
-                "required": ["order_id"],
-            },
-        },
-    }
-]
 
-
-# span_type=TOOL is not decoration. MLflow's ToolCallCorrectness scorer finds
-# tool calls by searching a trace for spans of this type -- without it, the
-# scorer sees an agent that never used a tool.
-@mlflow.trace(span_type=SpanType.TOOL)
+@tool
 def look_up_order(order_id: str) -> dict[str, str]:
-    """Return the status of one order.
-
-    Args:
-        order_id: The ID the customer asked about.
-
-    Returns:
-        The order record, or a not-found marker.
-    """
+    """Look up the current status of a customer order by its ID, e.g. A1001."""
     return ORDERS.get(order_id, {"status": "not found"})
 
 
@@ -87,11 +61,15 @@ def configure_mlflow() -> str:
     Returns:
         The experiment name traces and evaluations are written to.
     """
-    # Mint one OAuth token up front and hand it to every client MLflow builds
-    # internally. Otherwise each judge shells out to the Databricks CLI for its
-    # own token, and those refreshes collide on the OS keyring under the
-    # evaluation harness's parallelism ("cache update: exit status 45").
-    # The token is short-lived and never written to disk.
+    # Mint one OAuth token up front and share it with every client MLflow
+    # builds internally. Otherwise each judge shells out to the Databricks CLI
+    # for its own token, and those refreshes race each other over the OS
+    # keyring ("cache update: exit status 45").
+    #
+    # This is the fix for local, browser-based (U2M) login. Running unattended?
+    # Use a service principal instead -- see "Anything unattended is different"
+    # in SETUP.md -- and the SDK mints tokens in-process with nothing to race.
+    # The token here is short-lived and never written to disk.
     workspace = WorkspaceClient(profile=PROFILE)
     os.environ["DATABRICKS_HOST"] = workspace.config.host
     os.environ["DATABRICKS_TOKEN"] = workspace.config.authenticate()["Authorization"].removeprefix(
@@ -103,21 +81,52 @@ def configure_mlflow() -> str:
     user = workspace.current_user.me().user_name
     experiment = f"/Users/{user}/beginner-genai-evals"
     mlflow.set_experiment(experiment)
-    trace_openai_calls()
+
+    # Records the graph, the model call, and every tool call as spans. The
+    # TOOL spans are what MLflow's ToolCallCorrectness scorer looks for.
+    trace_langchain_calls()
     return experiment
 
 
 @functools.cache
-def _client() -> OpenAI:
-    """Build the model client once, on first use."""
+def _agent(version: str):
+    """Build the graph once per prompt version.
+
+    Args:
+        version: Which prompt in PROMPTS the agent should run with.
+
+    Returns:
+        The compiled LangGraph agent.
+    """
     workspace = WorkspaceClient(profile=PROFILE)
     token = workspace.config.authenticate()["Authorization"].removeprefix("Bearer ")
-    return OpenAI(api_key=token, base_url=f"{workspace.config.host}/serving-endpoints")
+    llm = ChatOpenAI(
+        model=MODEL,
+        api_key=token,
+        base_url=f"{workspace.config.host}/serving-endpoints",
+        max_tokens=400,
+    ).bind_tools([look_up_order])
+
+    def agent(state: MessagesState) -> dict:
+        system = SystemMessage(PROMPTS[version])
+        return {"messages": [llm.invoke([system] + state["messages"])]}
+
+    # The same two-node loop as sample 3: the model decides, the tools run,
+    # and control goes back to the model to write the answer.
+    return (
+        StateGraph(MessagesState)
+        .add_node("agent", agent)
+        .add_node("tools", ToolNode([look_up_order]))
+        .add_edge(START, "agent")
+        .add_conditional_edges("agent", tools_condition)
+        .add_edge("tools", "agent")
+        .compile()
+    )
 
 
 @mlflow.trace
 def answer(question: str, version: str = "v2") -> dict[str, str]:
-    """Answer a customer question, calling the order tool if the model asks to.
+    """Answer a customer question, letting the agent call the tool if it wants.
 
     Args:
         question: What the customer asked.
@@ -126,34 +135,8 @@ def answer(question: str, version: str = "v2") -> dict[str, str]:
     Returns:
         A dict with the agent's reply under "response".
     """
-    client = _client()
-    messages = [
-        {"role": "system", "content": PROMPTS[version]},
-        {"role": "user", "content": question},
-    ]
-
-    first = client.chat.completions.create(
-        model=MODEL, messages=messages, tools=TOOLS, max_tokens=400
-    )
-    reply = first.choices[0].message
-
-    if not reply.tool_calls:
-        return {"response": reply.content or ""}
-
-    # The model asked for the tool. Run it and hand the result back so it can
-    # write the real answer -- the same loop LangGraph ran for us in sample 3.
-    messages.append(reply.model_dump(exclude_none=True))
-    for call in reply.tool_calls:
-        # tool_calls is a union type; only function calls carry .function.
-        if call.type != "function":
-            continue
-        result = look_up_order(**json.loads(call.function.arguments))
-        messages.append({"role": "tool", "tool_call_id": call.id, "content": json.dumps(result)})
-
-    second = client.chat.completions.create(
-        model=MODEL, messages=messages, tools=TOOLS, max_tokens=400
-    )
-    return {"response": second.choices[0].message.content or ""}
+    result = _agent(version).invoke({"messages": [HumanMessage(question)]})
+    return {"response": result["messages"][-1].content}
 
 
 if __name__ == "__main__":

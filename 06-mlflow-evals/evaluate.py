@@ -12,6 +12,8 @@ different amounts:
 Run:  python evaluate.py
 """
 
+import json
+
 import mlflow
 import mlflow.genai
 from app import ORDERS, answer, configure_mlflow
@@ -53,7 +55,18 @@ def grounded_in_lookup(outputs, trace) -> Feedback:
     if not tool_spans:
         return Feedback(value=True, rationale="No lookup was made, so nothing to contradict.")
 
-    status = (tool_spans[0].outputs or {}).get("status", "")
+    # LangChain wraps a tool's return value in a ToolMessage, so the span's
+    # outputs are {"content": "<json string>", "status": "success", ...}.
+    # Note the trap: that outer "status" means the tool ran, not what it found.
+    raw = tool_spans[0].outputs or {}
+    payload = raw.get("content", raw) if isinstance(raw, dict) else raw
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except json.JSONDecodeError:
+            payload = {}
+
+    status = payload.get("status", "") if isinstance(payload, dict) else ""
     reply = outputs.get("response", "").lower()
 
     if status not in REAL_STATUSES:

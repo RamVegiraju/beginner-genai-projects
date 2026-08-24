@@ -138,7 +138,10 @@ change.
   judgements per run. Keep eval sets small and pointed.
 - **One token is minted up front** in `configure_mlflow()` and shared. Without
   it every judge shells out to the Databricks CLI, and those concurrent
-  refreshes collide on the OS keyring (`cache update: exit status 45`).
+  refreshes race over the OS keyring (`cache update: exit status 45`). That is
+  a property of browser-based login; a service principal has none of it, which
+  is what you would use to run this on a schedule. See
+  [SETUP.md](../SETUP.md#anything-unattended-is-different).
 - **Results live in your workspace**, not on disk, under an MLflow experiment
   in your user folder.
 

@@ -161,12 +161,32 @@ committed to a repo, dropped in Slack. Prefer OAuth.
 | Name profiles descriptively | Rely on `DEFAULT` |
 | `databricks auth describe` when confused | Guess |
 
-### Production is different
+### Anything unattended is different
 
-For CI, jobs, and deployed apps there's no browser to log into. That's what
-**service principals** with OAuth machine-to-machine (M2M) credentials are
-for — a non-human identity with scoped permissions. Out of scope for this
-series, but know it exists so you don't reach for a PAT when you get there.
+`databricks auth login` is **user-to-machine (U2M)** OAuth: it opens a browser,
+so it needs a human. Databricks recommends it for interactive development,
+which is exactly what this series is.
+
+For CI, jobs, scheduled evaluations, and deployed apps there is no browser.
+Use a **service principal** with **machine-to-machine (M2M)** OAuth — a
+non-human identity with scoped permissions:
+
+```bash
+export DATABRICKS_HOST=https://<your-workspace>.cloud.databricks.com
+export DATABRICKS_CLIENT_ID=<service-principal-client-id>
+export DATABRICKS_CLIENT_SECRET=<service-principal-secret>
+```
+
+The SDK picks these up with no code change — the samples keep working as
+written. Two reasons it matters beyond "there's no browser":
+
+- **No subprocess per client.** Under U2M the SDK shells out to the CLI for a
+  token every time it builds a client. M2M mints tokens in-process instead.
+- **It survives concurrency.** Tools that build many clients at once (an
+  evaluation harness, a busy server) make those CLI calls race each other over
+  the OS keyring. M2M has no keyring to contend over.
+
+Still never a PAT.
 
 ## Working with more than one workspace
 
