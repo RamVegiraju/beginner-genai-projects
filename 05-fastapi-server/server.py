@@ -24,7 +24,7 @@ from openai import AsyncOpenAI, OpenAI
 from pydantic import BaseModel
 
 MODEL = os.environ.get("SERVING_ENDPOINT", "databricks-claude-haiku-4-5")
-PROFILE = os.environ.get("DATABRICKS_PROFILE", "DEFAULT")
+PROFILE = os.environ.get("DATABRICKS_PROFILE", "genai-series")
 MAX_TOKENS = 150
 
 

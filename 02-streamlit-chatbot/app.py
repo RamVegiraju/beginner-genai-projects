@@ -15,7 +15,7 @@ from databricks.sdk import WorkspaceClient
 from openai import OpenAI
 
 MODEL = os.environ.get("SERVING_ENDPOINT", "databricks-claude-haiku-4-5")
-PROFILE = os.environ.get("DATABRICKS_PROFILE", "DEFAULT")
+PROFILE = os.environ.get("DATABRICKS_PROFILE", "genai-series")
 
 st.title("Chatbot")
 

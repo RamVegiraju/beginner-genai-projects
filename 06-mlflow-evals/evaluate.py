@@ -7,20 +7,10 @@ question "did my change help?" gets an actual number.
 Run:  python evaluate.py
 """
 
-import os
-
 import mlflow
 import mlflow.genai
 from app import answer, configure_mlflow
 from mlflow.genai.scorers import Correctness, Guidelines, RelevanceToQuery
-
-# Serialise the harness. By default MLflow scores rows in 10 threads, and every
-# judge shells out to the Databricks CLI for a token -- concurrent refreshes
-# collide on the OS keyring and the scorers fail with "cache update: exit
-# status 45". These evals are small, so serial costs little and never flakes.
-# MLflow reads these when evaluate() runs, so setting them here is enough.
-os.environ["MLFLOW_GENAI_EVAL_MAX_WORKERS"] = "1"
-os.environ["MLFLOW_GENAI_EVAL_MAX_SCORER_WORKERS"] = "1"
 
 # The eval set. Hand-written, small, and the most valuable thing here: these
 # are the questions you actually care about getting right.

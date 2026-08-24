@@ -15,7 +15,7 @@ from mlflow.openai import autolog as trace_openai_calls
 from openai import OpenAI
 
 MODEL = os.environ.get("SERVING_ENDPOINT", "databricks-claude-haiku-4-5")
-PROFILE = os.environ.get("DATABRICKS_PROFILE", "DEFAULT")
+PROFILE = os.environ.get("DATABRICKS_PROFILE", "genai-series")
 
 # Everything the assistant is allowed to know. Anything outside this is a
 # question it should decline rather than invent an answer to.

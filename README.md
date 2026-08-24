@@ -59,7 +59,7 @@ defaults.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `DATABRICKS_PROFILE` | `DEFAULT` | Which profile in `~/.databrickscfg`. [SETUP.md](SETUP.md) has you create `genai-series` — export this to point at it. |
+| `DATABRICKS_PROFILE` | `genai-series` | Which profile in `~/.databrickscfg`. [SETUP.md](SETUP.md) walks you through creating it. |
 | `SERVING_ENDPOINT` | `databricks-claude-haiku-4-5` | Which model to call |
 | `USER_ID` | `demo-user` | Who long-term memory belongs to (sample 4) |
 

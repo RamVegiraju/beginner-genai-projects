@@ -13,7 +13,7 @@ from databricks.sdk import WorkspaceClient
 from openai import OpenAI
 
 MODEL = os.environ.get("SERVING_ENDPOINT", "databricks-claude-haiku-4-5")
-PROFILE = os.environ.get("DATABRICKS_PROFILE", "DEFAULT")
+PROFILE = os.environ.get("DATABRICKS_PROFILE", "genai-series")
 
 # Databricks serving endpoints are OpenAI-compatible: use the real OpenAI SDK
 # and just point base_url at your workspace. Auth comes from your CLI profile,

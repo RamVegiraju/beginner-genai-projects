@@ -51,15 +51,25 @@ Then score both prompt versions:
 ==============================================
 metric                          v1        v2
 ----------------------------------------------
-concise/mean                  0.00      0.80
-correctness/mean              0.80      0.80
+concise/mean                  0.00      1.00
+correctness/mean              1.00      0.80
 relevance_to_query/mean       1.00      1.00
 ==============================================
 ```
 
-The two prompts differ only in a few added instructions. Conciseness went from
-0.00 to 0.80; correctness did not move. That is a more useful answer than "it
-felt better" — the change helped one thing and left another alone.
+The two prompts differ only in a few added instructions, and conciseness went
+from 0.00 to 1.00. That is a real answer instead of "it felt better".
+
+**Your numbers will not match exactly.** The judges are LLMs, so they are not
+deterministic — across runs, `concise` for v2 landed between 0.80 and 1.00 and
+`correctness` moved between 0.80 and 1.00 for both versions. On five
+questions, one judgement changing is worth 0.20, so treat a small gap as
+noise. What holds up across every run is the big one: v1 scores 0.00 on
+conciseness, every time.
+
+That is the real lesson about eval sets: a handful of questions tells you
+about large differences, not small ones. Add rows before you trust a
+close call.
 
 ## The question that shows why this matters
 
@@ -95,10 +105,10 @@ It sees the `request` and the `response`, so write rules about those.
 - **Judges are LLM calls.** Every score costs a model call, so a 5-question
   eval set with 3 scorers is 15 judgements per run. Keep eval sets small and
   focused on what you actually care about.
-- **The evaluation runs single-threaded on purpose.** By default MLflow scores
-  10 rows at a time, and each judge asks the Databricks CLI for a token.
-  Concurrent token refreshes collide on the OS keyring and scorers fail with
-  `cache update: exit status 45`. See the top of `evaluate.py`.
+- **If scorers fail with `cache update: exit status 45`,** your OAuth token
+  needs refreshing. Each judge asks the Databricks CLI for a token, and a
+  stale login makes those concurrent refreshes collide. Fix it at the source:
+  `databricks auth login --host <your-workspace> --profile genai-series`.
 - **Results live in your workspace**, not on disk. Everything is written to an
   MLflow experiment under your user folder.
 

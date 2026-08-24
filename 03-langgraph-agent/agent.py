@@ -20,7 +20,7 @@ from langgraph.graph import START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 
 MODEL = os.environ.get("SERVING_ENDPOINT", "databricks-claude-haiku-4-5")
-PROFILE = os.environ.get("DATABRICKS_PROFILE", "DEFAULT")
+PROFILE = os.environ.get("DATABRICKS_PROFILE", "genai-series")
 
 
 # --- The tool ---------------------------------------------------------------
