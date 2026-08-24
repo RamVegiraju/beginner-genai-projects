@@ -24,7 +24,8 @@ Each sample exists because the previous one hit a wall.
 
 - **Sample 1 — built and tested** against a live workspace.
 - **Sample 2 — built and tested** against a live workspace.
-- Samples 3–6 — scaffolded, not yet written.
+- **Sample 3 — built and tested** against a live workspace.
+- Samples 4–6 — scaffolded, not yet written.
 
 ## Setup
 
