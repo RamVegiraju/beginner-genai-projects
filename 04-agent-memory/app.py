@@ -26,7 +26,7 @@ from langgraph.store.base import BaseStore
 from langgraph.store.sqlite import SqliteStore
 
 MODEL = os.environ.get("SERVING_ENDPOINT", "databricks-claude-haiku-4-5")
-PROFILE = os.environ.get("DATABRICKS_PROFILE", "genai-series")
+PROFILE = os.environ.get("DATABRICKS_PROFILE")
 USER_ID = os.environ.get("USER_ID", "demo-user")
 
 NAMESPACE = (USER_ID, "profile")

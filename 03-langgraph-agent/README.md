@@ -58,6 +58,10 @@ bot > Good news! The weather in Chicago today looks favorable for flying...
 Every step is printed on purpose. You can see the model *decide* to call the
 tool, see what came back, and see it reason over the real number.
 
+The tool does not know airline or airport operations. A short system
+instruction keeps the answer grounded in its weather readings and sends the
+user to the airline or airport for actual delay status.
+
 ## The graph
 
 ```

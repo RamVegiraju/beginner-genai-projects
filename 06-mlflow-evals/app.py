@@ -20,7 +20,7 @@ from langgraph.prebuilt import ToolNode, tools_condition
 from mlflow.langchain import autolog as trace_langchain_calls
 
 MODEL = os.environ.get("SERVING_ENDPOINT", "databricks-claude-haiku-4-5")
-PROFILE = os.environ.get("DATABRICKS_PROFILE", "genai-series")
+PROFILE = os.environ.get("DATABRICKS_PROFILE")
 
 # Keep the whole series in one predictable place in the workspace. Beginners
 # do not need to configure an experiment name before running this sample.

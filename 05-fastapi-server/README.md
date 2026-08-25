@@ -106,8 +106,12 @@ model thinks:
 
 ```python
 async def agent(state: MessagesState) -> dict:
-    return {"messages": [await llm.ainvoke(state["messages"])]}
+    messages = [SystemMessage("Answer directly in no more than two sentences.")] + state["messages"]
+    return {"messages": [await llm.ainvoke(messages)]}
 ```
+
+The short instruction also prevents the small response budget from cutting a
+long answer off mid-sentence.
 
 Write `llm.invoke(...)` there instead and every caller queues up behind every
 other one, even though the endpoint still says `async def`.

@@ -27,15 +27,16 @@ import openai
 from databricks.sdk import WorkspaceClient
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import START, MessagesState, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from pydantic import BaseModel
 
 MODEL = os.environ.get("SERVING_ENDPOINT", "databricks-claude-haiku-4-5")
-PROFILE = os.environ.get("DATABRICKS_PROFILE", "genai-series")
-MAX_TOKENS = 150
+PROFILE = os.environ.get("DATABRICKS_PROFILE")
+MAX_TOKENS = 300
+SYSTEM = "Answer directly in no more than two sentences."
 
 
 class ChatRequest(BaseModel):
@@ -78,7 +79,8 @@ def build_graph() -> CompiledStateGraph:
     )
 
     async def agent(state: MessagesState) -> dict:
-        return {"messages": [await llm.ainvoke(state["messages"])]}
+        messages = [SystemMessage(SYSTEM)] + state["messages"]
+        return {"messages": [await llm.ainvoke(messages)]}
 
     return StateGraph(MessagesState).add_node("agent", agent).add_edge(START, "agent").compile()
 

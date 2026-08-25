@@ -34,8 +34,9 @@ Samples 2 and 4 are Streamlit; drive them headlessly with `streamlit.testing.v1.
 (`AppTest.from_file(path, default_timeout=120)` — the 3s default is too short for model
 calls).
 
-Env vars, all optional: `DATABRICKS_PROFILE` (default `genai-series`), `SERVING_ENDPOINT`,
-`USER_ID` (sample 4), `MLFLOW_EXPERIMENT_NAME` (sample 6).
+Optional env vars: `SERVING_ENDPOINT` (defaults to `databricks-claude-haiku-4-5`),
+`DATABRICKS_PROFILE` (otherwise SDK ambient auth), `USER_ID` (sample 4), and
+`MLFLOW_EXPERIMENT_NAME` (sample 6).
 
 ## Architecture
 

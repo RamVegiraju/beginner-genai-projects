@@ -99,10 +99,17 @@ databricks serving-endpoints list --profile genai-series
 If that list is empty, Foundation Model APIs aren't enabled and nothing in
 this series will run — sort that out first.
 
-**Always list rather than trusting a model name you read somewhere.** New
-models land regularly and old ones retire, so any hard-coded name — including
-the default in these samples — goes stale eventually. The list above is the
-source of truth for your workspace.
+The samples default to `databricks-claude-haiku-4-5`. If it is unavailable—or
+you prefer another model—choose an endpoint whose task is chat and whose state
+is `READY`, then export its exact name:
+
+```bash
+export SERVING_ENDPOINT=<a-ready-chat-endpoint>
+```
+
+**Always list rather than trusting a model name you read somewhere.** Model
+availability differs by workspace, new models land regularly, and old ones
+retire. The list above is the source of truth for your workspace.
 
 ## 4. Python environment
 
@@ -178,7 +185,8 @@ export DATABRICKS_CLIENT_SECRET=<service-principal-secret>
 ```
 
 The SDK picks these up with no code change — the samples keep working as
-written. Two reasons it matters beyond "there's no browser":
+written. `DATABRICKS_PROFILE` is optional; when absent, the SDK discovers
+these ambient credentials. Two reasons it matters beyond "there's no browser":
 
 - **No subprocess per client.** Under U2M the SDK shells out to the CLI for a
   token every time it builds a client. M2M mints tokens in-process instead.

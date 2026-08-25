@@ -50,10 +50,12 @@ reason chat interfaces type at you.
 
 ## Configuration
 
-Both are optional — the script falls back to these defaults.
+The sample defaults to `databricks-claude-haiku-4-5`. Both variables below are
+optional: override the model if desired, and omit the profile when your
+environment already supplies Databricks credentials.
 
 ```bash
-export SERVING_ENDPOINT=databricks-claude-haiku-4-5
+export SERVING_ENDPOINT=<another-ready-chat-endpoint>
 export DATABRICKS_PROFILE=genai-series
 ```
 
@@ -64,8 +66,7 @@ since models come and go:
 databricks serving-endpoints list --profile genai-series
 ```
 
-The default is `databricks-claude-haiku-4-5` — fast and cheap, which matters
-while you're re-running the script and learning.
+If Haiku is not available, select any ready chat endpoint from that list.
 
 ## Next
 

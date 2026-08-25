@@ -52,16 +52,46 @@ cd 01-first-llm-call && ../.venv/bin/python invoke.py
 Each sample has its own `requirements.txt` and its own README. Start with
 [`01-first-llm-call/`](01-first-llm-call/).
 
+## Quick validation
+
+The smoke tests check configuration and pure helper behavior without calling a
+model or needing workspace credentials:
+
+```bash
+uv pip install --python .venv/bin/python -r requirements-dev.txt
+.venv/bin/ruff check .
+.venv/bin/pytest -q
+```
+
+Running each sample is still the end-to-end test because model access,
+authentication, tracing, and endpoint capabilities belong to the workspace.
+
 ## Configuration
 
-All optional. Copy `.env.example` to `.env` if your setup differs from the
-defaults.
+The samples default to `databricks-claude-haiku-4-5`. To use another ready
+chat endpoint, export the override directly or copy `.env.example` to `.env`
+and load it into your shell:
 
-| Variable | Default | Meaning |
+```bash
+set -a; source .env; set +a
+```
+
+| Variable | Required? | Meaning |
 |---|---|---|
-| `DATABRICKS_PROFILE` | `genai-series` | Which profile in `~/.databrickscfg`. [SETUP.md](SETUP.md) walks you through creating it. |
-| `SERVING_ENDPOINT` | `databricks-claude-haiku-4-5` | Which model to call |
-| `USER_ID` | `demo-user` | Who long-term memory belongs to (sample 4) |
+| `SERVING_ENDPOINT` | No; defaults to `databricks-claude-haiku-4-5` | A different ready chat endpoint |
+| `DATABRICKS_PROFILE` | No | A named CLI profile. If omitted, the SDK uses ambient authentication. |
+| `USER_ID` | No; defaults to `demo-user` | Who long-term memory belongs to (sample 4) |
+
+If Haiku is unavailable in your workspace, [SETUP.md](SETUP.md) shows how to
+choose another endpoint.
+
+## Last validated
+
+All six samples were exercised against an Azure Databricks workspace on
+August 25, 2026, using Python 3.12.13. Key resolved versions were
+Databricks SDK 0.133.0, OpenAI 3.2.0, LangGraph 1.2.11, FastAPI 0.141.1, and
+MLflow 3.15.1. The requirements specify supported minimums rather than tying
+the series to that one workspace or environment.
 
 ## A note on credentials
 

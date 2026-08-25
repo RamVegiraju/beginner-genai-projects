@@ -36,9 +36,9 @@ Then install this sample's dependencies, **from the repo root**:
 uv pip install --python .venv/bin/python -r 06-mlflow-evals/requirements.txt
 ```
 
-`databricks-agents` is required, not optional: the built-in judges live there,
-and without it every scorer fails with `No module named 'databricks.agents'`
-while `evaluate()` still reports success.
+Both `langchain` and `databricks-agents` are required. MLflow's LangChain
+autologging imports the top-level `langchain` package, while the built-in
+Databricks judges use `databricks-agents`.
 
 ## Run
 
@@ -66,7 +66,7 @@ helpfulness/mean: 4.80
 tool_call_correctness/mean: 1.00
 ```
 
-About 25 seconds for ten questions. The two deterministic scorers sit at 1.00;
+About 15–30 seconds for ten questions. The two correctness scorers sit at 1.00;
 `helpfulness` moves between 4.60 and 4.80 across runs, because it is an LLM
 judge and is not perfectly repeatable even at temperature 0. Treat small gaps
 as noise and add questions before trusting a close call.

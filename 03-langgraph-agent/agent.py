@@ -14,13 +14,20 @@ import os
 
 import requests
 from databricks.sdk import WorkspaceClient
+from langchain_core.messages import SystemMessage
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 from langgraph.graph import START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 
 MODEL = os.environ.get("SERVING_ENDPOINT", "databricks-claude-haiku-4-5")
-PROFILE = os.environ.get("DATABRICKS_PROFILE", "genai-series")
+PROFILE = os.environ.get("DATABRICKS_PROFILE")
+
+SYSTEM = """Use the weather tool for current conditions. Only report facts the tool
+returns. Do not predict whether delays are likely or whether the readings will cause
+delays, and do not characterize the conditions as favorable or unfavorable for flying.
+Say that weather readings alone cannot determine airport or airline delays, then
+recommend checking the airline or airport for delay status."""
 
 
 # --- The tool ---------------------------------------------------------------
@@ -95,7 +102,7 @@ llm = ChatOpenAI(
 
 def agent(state: MessagesState) -> dict:
     """Ask the model what to do next, given the conversation so far."""
-    return {"messages": [llm.invoke(state["messages"])]}
+    return {"messages": [llm.invoke([SystemMessage(SYSTEM)] + state["messages"])]}
 
 
 graph = (
