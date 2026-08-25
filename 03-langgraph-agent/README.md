@@ -44,7 +44,7 @@ cd 03-langgraph-agent
 ../.venv/bin/python agent.py
 ```
 
-Output:
+Output (your weather will differ — the tool fetches it live):
 
 ```
 user> I'm flying out of Chicago today. Should I expect weather delays?
@@ -86,14 +86,16 @@ another tool.
 ```
 What is 2+2?
 ```
-→ no tool call, 2 steps. The model isn't required to use what it's given.
+→ **no tool call at all.** It just answers. The model isn't required to use
+what it's given.
 
 **It calls the tool twice, in one turn.**
 
 ```
 Compare the weather in Denver and Miami right now.
 ```
-→ two calls (`Denver`, `Miami`), 5 steps, one combined answer.
+→ **two tool calls in a single turn** (`Denver`, then `Miami`), then one
+combined answer. The loop runs until the model stops asking for tools.
 
 **It handles bad input.**
 

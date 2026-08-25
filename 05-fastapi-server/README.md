@@ -70,6 +70,10 @@ Same endpoint, same model, same eight questions. Sent together, they finish in
 about the time of a single request, because the server used each wait to work
 on somebody else's.
 
+Your exact timings will differ — they depend on network and model latency. The
+speedup lands somewhere around 5x on a typical run. What matters is the shape:
+sending them together costs roughly one request's worth of time.
+
 ## The endpoints
 
 ```python
