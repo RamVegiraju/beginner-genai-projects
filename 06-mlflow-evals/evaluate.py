@@ -4,6 +4,7 @@ Run: python evaluate.py
 """
 
 import json
+import os
 
 import mlflow
 import mlflow.genai
@@ -12,6 +13,11 @@ from mlflow.entities import Feedback, SpanType
 from mlflow.genai.judges import make_judge
 from mlflow.genai.scorers import ToolCallCorrectness, scorer
 
+# Skip MLflow's pre-flight check, which calls predict_fn once to verify the
+# signature before scoring starts. It hangs here, and the evaluation never
+# begins. Everything it would have caught shows up on the first scored row.
+os.environ.setdefault("MLFLOW_GENAI_EVAL_SKIP_TRACE_VALIDATION", "true")
+
 # Each question requires an order lookup. This keeps the built-in tool-call
 # scorer focused on a clear, observable behavior.
 EVAL_SET = [
@@ -19,6 +25,12 @@ EVAL_SET = [
     {"inputs": {"question": "Has order A1001 arrived yet?"}},
     {"inputs": {"question": "I can't find my order B9999, what happened to it?"}},
     {"inputs": {"question": "When will order A1003 ship?"}},
+    {"inputs": {"question": "Did someone cancel order A1004? I never asked for that."}},
+    {"inputs": {"question": "Order A1005 is late. What is going on with it?"}},
+    {"inputs": {"question": "I think order A1006 arrived last month, can you confirm?"}},
+    {"inputs": {"question": "Quick one — status on A1002 please."}},
+    {"inputs": {"question": "My friend says order ZZ0000 is mine. Is it?"}},
+    {"inputs": {"question": "Is A1003 out for delivery yet?"}},
 ]
 
 REAL_STATUSES = {order["status"] for order in ORDERS.values()}

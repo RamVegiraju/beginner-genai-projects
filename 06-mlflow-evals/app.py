@@ -25,13 +25,16 @@ PROFILE = os.environ.get("DATABRICKS_PROFILE", "genai-series")
 # Keep the whole series in one predictable place in the workspace. Beginners
 # do not need to configure an experiment name before running this sample.
 # Set MLFLOW_EXPERIMENT_NAME only when intentionally creating a separate run.
-EXPERIMENT_NAME = os.environ.get("MLFLOW_EXPERIMENT_NAME", "beginner-genai-series")
+EXPERIMENT_NAME = os.environ.get("MLFLOW_EXPERIMENT_NAME", "beginner-genai-eval-final")
 
 # Stands in for the database a real support agent would query.
 ORDERS = {
     "A1001": {"status": "delivered", "delivered_on": "2026-08-19"},
     "A1002": {"status": "in transit", "expected_on": "2026-08-27"},
     "A1003": {"status": "preparing", "ships_on": "2026-09-01"},
+    "A1004": {"status": "cancelled", "cancelled_on": "2026-08-11"},
+    "A1005": {"status": "delayed", "expected_on": "2026-09-08"},
+    "A1006": {"status": "delivered", "delivered_on": "2026-07-30"},
 }
 
 POLICY = """Bean Box policy:

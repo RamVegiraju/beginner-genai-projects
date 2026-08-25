@@ -68,7 +68,11 @@ Samples never import from each other. Each has its own `requirements.txt`.
   `configure_mlflow()` and share it; otherwise each judge shells out to the Databricks CLI
   and the concurrent refreshes contend over the OS keyring (`cache update: exit status 45`).
 - **`ToolCallCorrectness` finds tools via `span_type=SpanType.TOOL`.** Without that span
-  type it sees an agent that never used a tool.
+  type it sees an agent that never used a tool. `langchain.autolog()` emits them; disable
+  it and `grounded_in_lookup` silently drops to 0.00.
+- **Sample 6 stalls before scoring roughly one run in three**, stuck at `0/10`. Cause not
+  understood; kill and re-run. `MLFLOW_GENAI_EVAL_SKIP_TRACE_VALIDATION` is already set and
+  is *not* the fix for this.
 - **LangChain wraps tool returns in a ToolMessage.** Span outputs look like
   `{"content": "<json>", "status": "success"}` — that `status` means the tool ran, not what
   it found. Parse `content`.

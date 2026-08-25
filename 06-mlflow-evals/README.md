@@ -23,7 +23,7 @@ different amounts:
 
 **3. You do not always need labelled data.** None of these three need a
 written-out correct answer, which matters — ground truth is the expensive part
-of an eval set.
+of an eval set. The ten questions in `evaluate.py` are just questions.
 
 ## Setup
 
@@ -62,14 +62,14 @@ Then score the agent:
 ```
 Evaluation complete
 grounded_in_lookup/mean: 1.00
-helpfulness/mean: 4.75
+helpfulness/mean: 4.80
 tool_call_correctness/mean: 1.00
 ```
 
-About 30 seconds for four questions. `helpfulness` moves between 4.50 and 4.75
-across runs — it is an LLM judge, so it is not perfectly repeatable even at
-temperature 0. On four rows one changed judgement is worth 0.25, so treat small
-gaps as noise and add rows before trusting a close call.
+About 25 seconds for ten questions. The two deterministic scorers sit at 1.00;
+`helpfulness` moves between 4.60 and 4.80 across runs, because it is an LLM
+judge and is not perfectly repeatable even at temperature 0. Treat small gaps
+as noise and add questions before trusting a close call.
 
 ## The three scorers
 
@@ -115,8 +115,17 @@ judge gets.
 
 ## Notes
 
-- **Judges are LLM calls.** Four questions and two LLM scorers is eight
-  judgements per run. Keep eval sets small and pointed.
+- **Judges are LLM calls.** Ten questions and two LLM scorers is twenty
+  judgements per run, on top of the agent's own calls. Keep eval sets pointed.
+- **`MLFLOW_GENAI_EVAL_SKIP_TRACE_VALIDATION` is set** at the top of
+  `evaluate.py`. MLflow otherwise calls your function once before scoring to
+  check its signature, and that check can hang here. Anything it would catch
+  surfaces on the first scored question anyway.
+- **If a run sits at `0/10` for more than ~30 seconds, kill it and re-run.**
+  It stalls before scoring starts, roughly one run in three, and the cause is
+  not yet understood — most likely contention between this sample's
+  `langchain.autolog()` and the tracing MLflow enables during evaluation.
+  A completed run is always correct; a stalled one never starts.
 - **The graph is compiled once** (`@functools.cache`). MLflow scores rows in
   several threads, and building a fresh client per call inside them is both
   wasteful and a source of flakiness.
