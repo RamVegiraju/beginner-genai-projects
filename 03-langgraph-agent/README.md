@@ -25,11 +25,16 @@ entirely. Ask about two cities and it calls the tool twice.
 
 ## Setup
 
+**First time?** Do [SETUP.md](../SETUP.md) first — install the CLI, log in,
+and create the virtual environment. Five minutes, once for the whole series.
+
+Then install this sample's dependencies, **from the repo root**:
+
 ```bash
 uv pip install --python .venv/bin/python -r 03-langgraph-agent/requirements.txt
 ```
 
-No API key needed for the weather data — [Open-Meteo](https://open-meteo.com/)
+No API key is needed for the weather data — [Open-Meteo](https://open-meteo.com/)
 is free and open.
 
 ## Run

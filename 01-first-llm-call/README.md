@@ -16,8 +16,14 @@ the CLI profile. Nothing to paste, nothing to leak, nothing to rotate.
 
 ## Setup
 
-First time here? Do [SETUP.md](../SETUP.md) first — CLI, login, and Python
-environment. Once that's done:
+**First time?** Do [SETUP.md](../SETUP.md) first — install the CLI, log in,
+and create the virtual environment. Five minutes, once for the whole series.
+
+Then install this sample's dependencies, **from the repo root**:
+
+```bash
+uv pip install --python .venv/bin/python -r 01-first-llm-call/requirements.txt
+```
 
 ## Run
 

@@ -29,6 +29,11 @@ at a time as they do together, on the same one process.
 
 ## Setup
 
+**First time?** Do [SETUP.md](../SETUP.md) first — install the CLI, log in,
+and create the virtual environment. Five minutes, once for the whole series.
+
+Then install this sample's dependencies, **from the repo root**:
+
 ```bash
 uv pip install --python .venv/bin/python -r 05-fastapi-server/requirements.txt
 ```

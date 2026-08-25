@@ -4,9 +4,6 @@ Same graph as sample 3 -- model, tool, loop -- pointed at order lookups
 instead of weather. Anything about a specific order has to come from the
 `look_up_order` tool, because the model has no other way to know it.
 
-Two versions differ only in the system prompt, so sample 6 can ask whether the
-change actually helped.
-
 Run this file directly to send one question through and record a trace.
 """
 
@@ -25,6 +22,11 @@ from mlflow.langchain import autolog as trace_langchain_calls
 MODEL = os.environ.get("SERVING_ENDPOINT", "databricks-claude-haiku-4-5")
 PROFILE = os.environ.get("DATABRICKS_PROFILE", "genai-series")
 
+# Keep the whole series in one predictable place in the workspace. Beginners
+# do not need to configure an experiment name before running this sample.
+# Set MLFLOW_EXPERIMENT_NAME only when intentionally creating a separate run.
+EXPERIMENT_NAME = os.environ.get("MLFLOW_EXPERIMENT_NAME", "beginner-genai-series")
+
 # Stands in for the database a real support agent would query.
 ORDERS = {
     "A1001": {"status": "delivered", "delivered_on": "2026-08-19"},
@@ -37,16 +39,13 @@ POLICY = """Bean Box policy:
 - Shipping: free on orders over $40, otherwise $5.
 - Orders ship on the first Tuesday of every month."""
 
-PROMPTS = {
-    "v1": f"You are a support agent for Bean Box.\n\n{POLICY}",
-    "v2": f"""You are a support agent for Bean Box.
+PROMPT = f"""You are a support agent for Bean Box.
 
 Never guess the status of an order. Always call look_up_order first, and
 report exactly what it returns. If an order is not found, say so plainly.
 Only answer policy questions from the policy below. Keep replies short.
 
-{POLICY}""",
-}
+{POLICY}"""
 
 
 @tool
@@ -55,31 +54,45 @@ def look_up_order(order_id: str) -> dict[str, str]:
     return ORDERS.get(order_id, {"status": "not found"})
 
 
+@functools.cache
+def _credentials() -> tuple[str, str]:
+    """Mint one OAuth token and reuse it for everything. Runs once.
+
+    Every client built after this reuses the result, so nothing shells out to
+    the Databricks CLI again. That matters under the evaluation harness, which
+    builds clients from several threads at once -- concurrent CLI refreshes
+    contend over the OS keyring and can stall.
+
+    Returns:
+        (workspace host, bearer token)
+    """
+    workspace = WorkspaceClient(profile=PROFILE)
+    token = workspace.config.authenticate()["Authorization"].removeprefix("Bearer ")
+    return workspace.config.host, token
+
+
 def configure_mlflow() -> str:
     """Point MLflow at Databricks-managed tracking and pick the experiment.
 
     Returns:
         The experiment name traces and evaluations are written to.
     """
-    # Mint one OAuth token up front and share it with every client MLflow
-    # builds internally. Otherwise each judge shells out to the Databricks CLI
-    # for its own token, and those refreshes race each other over the OS
-    # keyring ("cache update: exit status 45").
+    # Hand the one token to every client MLflow builds internally, so its
+    # judges do not each shell out to the CLI. Short-lived, never on disk.
     #
     # This is the fix for local, browser-based (U2M) login. Running unattended?
     # Use a service principal instead -- see "Anything unattended is different"
     # in SETUP.md -- and the SDK mints tokens in-process with nothing to race.
-    # The token here is short-lived and never written to disk.
-    workspace = WorkspaceClient(profile=PROFILE)
-    os.environ["DATABRICKS_HOST"] = workspace.config.host
-    os.environ["DATABRICKS_TOKEN"] = workspace.config.authenticate()["Authorization"].removeprefix(
-        "Bearer "
-    )
+    host, token = _credentials()
+    os.environ["DATABRICKS_HOST"] = host
+    os.environ["DATABRICKS_TOKEN"] = token
 
     mlflow.set_tracking_uri("databricks")
 
-    user = workspace.current_user.me().user_name
-    experiment = f"/Users/{user}/beginner-genai-evals"
+    # No profile= here: it picks up the token above, so this does not shell
+    # out to the CLI either.
+    user = WorkspaceClient().current_user.me().user_name
+    experiment = f"/Users/{user}/{EXPERIMENT_NAME}"
     mlflow.set_experiment(experiment)
 
     # Records the graph, the model call, and every tool call as spans. The
@@ -89,26 +102,18 @@ def configure_mlflow() -> str:
 
 
 @functools.cache
-def _agent(version: str):
-    """Build the graph once per prompt version.
-
-    Args:
-        version: Which prompt in PROMPTS the agent should run with.
-
-    Returns:
-        The compiled LangGraph agent.
-    """
-    workspace = WorkspaceClient(profile=PROFILE)
-    token = workspace.config.authenticate()["Authorization"].removeprefix("Bearer ")
+def _agent():
+    """Build the support agent graph. Compiled once and reused."""
+    host, token = _credentials()
     llm = ChatOpenAI(
         model=MODEL,
         api_key=token,
-        base_url=f"{workspace.config.host}/serving-endpoints",
+        base_url=f"{host}/serving-endpoints",
         max_tokens=400,
     ).bind_tools([look_up_order])
 
     def agent(state: MessagesState) -> dict:
-        system = SystemMessage(PROMPTS[version])
+        system = SystemMessage(PROMPT)
         return {"messages": [llm.invoke([system] + state["messages"])]}
 
     # The same two-node loop as sample 3: the model decides, the tools run,
@@ -125,21 +130,19 @@ def _agent(version: str):
 
 
 @mlflow.trace
-def answer(question: str, version: str = "v2") -> dict[str, str]:
+def answer(question: str) -> dict[str, str]:
     """Answer a customer question, letting the agent call the tool if it wants.
 
     Args:
         question: What the customer asked.
-        version: Which prompt in PROMPTS to use.
-
     Returns:
         A dict with the agent's reply under "response".
     """
-    result = _agent(version).invoke({"messages": [HumanMessage(question)]})
+    result = _agent().invoke({"messages": [HumanMessage(question)]})
     return {"response": result["messages"][-1].content}
 
 
 if __name__ == "__main__":
     experiment = configure_mlflow()
-    print(answer("Where is my order A1002?", version="v2")["response"])
+    print(answer("Where is my order A1002?")["response"])
     print(f"\nTrace recorded in {experiment} — open it in the Databricks UI.")

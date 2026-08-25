@@ -1,11 +1,9 @@
 # 6 — Evaluating with MLflow
 
-You changed the prompt. Did it get better?
+"It seems good" is not a quality bar. This sample measures a LangGraph agent
+instead of guessing at it, using Databricks-managed MLflow.
 
-"It seems good" is how most GenAI projects quietly fail. This sample measures
-the answer instead, using Databricks-managed MLflow.
-
-The app is a support agent with one tool, `look_up_order`. Anything about a
+The agent is customer support with one tool, `look_up_order`. Anything about a
 specific order has to come from that tool — the model cannot know it otherwise.
 
 ## What this sample showcases
@@ -20,7 +18,7 @@ different amounts:
 | Scorer | Kind | Asks | Cost |
 |---|---|---|---|
 | `ToolCallCorrectness` | built-in | Did it call the right tool with the right arguments? | an LLM call |
-| `grounded_in_lookup` | your code | Does the reply match what the tool returned? | free |
+| `grounded_in_lookup` | your Python | Does the reply contradict what the tool returned? | free |
 | `helpfulness` | your LLM judge | Was this a good support reply, 1–5? | an LLM call |
 
 **3. You do not always need labelled data.** None of these three need a
@@ -29,13 +27,18 @@ of an eval set.
 
 ## Setup
 
+**First time?** Do [SETUP.md](../SETUP.md) first — install the CLI, log in,
+and create the virtual environment. Five minutes, once for the whole series.
+
+Then install this sample's dependencies, **from the repo root**:
+
 ```bash
 uv pip install --python .venv/bin/python -r 06-mlflow-evals/requirements.txt
 ```
 
-`databricks-agents` is required, not optional — the built-in judges are
-implemented there, and without it every scorer fails with
-`No module named 'databricks.agents'`.
+`databricks-agents` is required, not optional: the built-in judges live there,
+and without it every scorer fails with `No module named 'databricks.agents'`
+while `evaluate()` still reports success.
 
 ## Run
 
@@ -50,31 +53,23 @@ Open the experiment it prints. You will see the model call, the tool call with
 its arguments and result, and the tokens it cost. **Do this before scoring
 anything** — you cannot debug what you cannot see.
 
-Then score both prompt versions:
+Then score the agent:
 
 ```bash
 ../.venv/bin/python evaluate.py
 ```
 
 ```
-====================================================
-metric                                v1        v2
-----------------------------------------------------
-grounded_in_lookup/mean             1.00      1.00
-helpfulness/mean                    4.75      4.50
-tool_call_correctness/mean          0.75      0.75
-====================================================
+Evaluation complete
+grounded_in_lookup/mean: 1.00
+helpfulness/mean: 4.75
+tool_call_correctness/mean: 1.00
 ```
 
-**Your numbers will not match exactly.** Two of the three scorers are LLM
-judges, so they are not deterministic. On four questions a single changed
-judgement is worth 0.25, so treat small gaps as noise and add rows before
-trusting a close call.
-
-And read this table honestly: **v2 did not beat v1.** The stricter prompt
-changed nothing measurable and scored slightly lower on helpfulness, because
-it is terser. That is a real result, and knowing it before you ship beats
-believing the change helped.
+About 30 seconds for four questions. `helpfulness` moves between 4.50 and 4.75
+across runs — it is an LLM judge, so it is not perfectly repeatable even at
+temperature 0. On four rows one changed judgement is worth 0.25, so treat small
+gaps as noise and add rows before trusting a close call.
 
 ## The three scorers
 
@@ -85,65 +80,54 @@ ones. It finds them by searching for spans of type `TOOL`, which is why the
 tool in `app.py` is decorated:
 
 ```python
-@mlflow.trace(span_type=SpanType.TOOL)
+@tool
 def look_up_order(order_id: str) -> dict[str, str]: ...
 ```
 
-Without that `span_type`, the scorer sees an agent that never used a tool.
+LangGraph's `ToolNode` emits the `TOOL` span for you. Without that span type
+the scorer sees an agent that never used a tool.
 
-### Your code: `grounded_in_lookup`
+### Your Python: `grounded_in_lookup`
 
-Plain Python. No model call, no cost, same answer every time. If a check can
-be written this way, write it this way and save the judges for things that
-need judgement.
+No model call, no cost, same answer every time. If a check can be written this
+way, write it this way and save the judges for things that need judgement.
 
-Code scorers are *literal*, though. The first version of this one looked for
-the string `"not found"` in the reply — and scored a perfectly good *"I'm
-unable to find order B9999"* as a failure. It now checks the two cases
-separately: a real status must be repeated, and a missing order must not have
-a status invented for it.
+The catch is that code scorers are *literal*. An earlier version required the
+reply to repeat the tool's status verbatim, and failed this perfectly good
+answer:
+
+```
+tool returned:  "preparing"
+agent replied:  "Order A1003 will ship on September 1. It's currently being prepared."
+```
+
+So it checks for **contradiction** instead: the reply must not claim a status
+the tool did not return. That survives paraphrase and still catches the failure
+that matters — inventing a status, especially for an order that does not exist.
 
 ### Your LLM judge: `helpfulness`
 
 `make_judge` takes plain instructions with `{{ inputs }}` and `{{ outputs }}`
-placeholders, and a `feedback_value_type` — here `int`, for a 1–5 rating.
-Use this for what code cannot decide: tone, clarity, whether the customer
-actually knows what to do next.
-
-## A judge that is wrong, on purpose
-
-`tool_call_correctness` sits at 0.75 for both versions. The failure is the
-policy question, *"How long do I have to return something?"* — the agent
-correctly answered from policy without touching the tool, and the judge marked
-it wrong:
-
-> the agent did not call any tools. The available tool, 'look_up_order', is
-> relevant because...
-
-Without ground truth this scorer treats "called nothing" as a miss. You can
-pin it down by adding `expectations={"expected_tool_calls": [...]}` per row —
-but note an **empty list is read as "no expectations given"**, so there is no
-way to state "correctly called nothing".
-
-Keep this one in mind. A score is where you start looking, not the answer.
-Open the rationale, which is why the sample pairs LLM judges with a cheap
-deterministic scorer that cannot be talked into anything.
-
-`ToolCallCorrectness` is also marked **Experimental** in MLflow 3.15 and may
-change.
+placeholders, and a `feedback_value_type` — here `int`, for a 1–5 rating. Use
+it for what code cannot decide: tone, clarity, whether the customer knows what
+to do next. `inference_params={"temperature": 0}` keeps it as steady as an LLM
+judge gets.
 
 ## Notes
 
-- **Judges are LLM calls.** Four questions, three scorers, two versions is 24
+- **Judges are LLM calls.** Four questions and two LLM scorers is eight
   judgements per run. Keep eval sets small and pointed.
+- **The graph is compiled once** (`@functools.cache`). MLflow scores rows in
+  several threads, and building a fresh client per call inside them is both
+  wasteful and a source of flakiness.
 - **One token is minted up front** in `configure_mlflow()` and shared. Without
   it every judge shells out to the Databricks CLI, and those concurrent
   refreshes race over the OS keyring (`cache update: exit status 45`). That is
-  a property of browser-based login; a service principal has none of it, which
-  is what you would use to run this on a schedule. See
+  a property of browser-based login; a service principal has none of it — see
   [SETUP.md](../SETUP.md#anything-unattended-is-different).
 - **Results live in your workspace**, not on disk, under an MLflow experiment
-  in your user folder.
+  in your user folder. Set `MLFLOW_EXPERIMENT_NAME` to change where.
+- `ToolCallCorrectness` is marked **Experimental** in MLflow 3.15 and may change.
 
 ## Next
 
