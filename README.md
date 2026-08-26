@@ -79,7 +79,7 @@ set -a; source .env; set +a
 | Variable | Required? | Meaning |
 |---|---|---|
 | `SERVING_ENDPOINT` | No; defaults to `databricks-claude-haiku-4-5` | A different ready chat endpoint |
-| `DATABRICKS_PROFILE` | No | A named CLI profile. If omitted, the SDK uses ambient authentication. |
+| `DATABRICKS_PROFILE` | Yes, unless credentials come from elsewhere | A named CLI profile. Omit it only where the environment already supplies credentials. |
 | `USER_ID` | No; defaults to `demo-user` | Who long-term memory belongs to (sample 4) |
 
 If Haiku is unavailable in your workspace, [SETUP.md](SETUP.md) shows how to

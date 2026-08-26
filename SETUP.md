@@ -124,9 +124,13 @@ No `uv`? `pip install uv`, or use plain `python3.12 -m venv .venv` and
 ## 5. Run the first sample
 
 ```bash
+export DATABRICKS_PROFILE=genai-series   # again if this is a new terminal
 cd 01-first-llm-call
 ../.venv/bin/python invoke.py
 ```
+
+That is the loop for every sample in the series: install its
+`requirements.txt` from the repo root, `cd` in, run it.
 
 ---
 
@@ -230,3 +234,4 @@ avoid running something against the wrong workspace.
 | `does not support the temperature parameter` | Newest reasoning models reject it | Drop `temperature` from the call |
 | `command not found: databricks` | CLI not on `PATH` | Reopen your terminal, or reinstall |
 | Wrong workspace hit | Ambiguous profile | `databricks auth describe` to see which one is active |
+| `Use --profile to specify which profile to use` | Several profiles share one host, and `DATABRICKS_PROFILE` is unset | `export DATABRICKS_PROFILE=genai-series` |

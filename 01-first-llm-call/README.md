@@ -28,6 +28,7 @@ uv pip install --python .venv/bin/python -r 01-first-llm-call/requirements.txt
 ## Run
 
 ```bash
+export DATABRICKS_PROFILE=genai-series   # once per terminal
 cd 01-first-llm-call
 ../.venv/bin/python invoke.py
 ```
@@ -50,14 +51,10 @@ reason chat interfaces type at you.
 
 ## Configuration
 
-The sample defaults to `databricks-claude-haiku-4-5`. Both variables below are
-optional: override the model if desired, and omit the profile when your
-environment already supplies Databricks credentials.
-
-```bash
-export SERVING_ENDPOINT=<another-ready-chat-endpoint>
-export DATABRICKS_PROFILE=genai-series
-```
+| Variable | Required? | Meaning |
+|---|---|---|
+| `DATABRICKS_PROFILE` | Yes, unless credentials come from elsewhere | The profile you logged in with in [SETUP.md](../SETUP.md) |
+| `SERVING_ENDPOINT` | No — defaults to `databricks-claude-haiku-4-5` | Any other ready chat endpoint |
 
 See what your workspace offers — and prefer this over any hard-coded name,
 since models come and go:
@@ -66,7 +63,18 @@ since models come and go:
 databricks serving-endpoints list --profile genai-series
 ```
 
-If Haiku is not available, select any ready chat endpoint from that list.
+If Haiku isn't there, export any ready chat endpoint from that list:
+
+```bash
+export SERVING_ENDPOINT=<another-ready-chat-endpoint>
+```
+
+**When can you omit the profile?** When something else already supplies
+credentials — `DATABRICKS_HOST` + `DATABRICKS_TOKEN`, a service principal's
+`DATABRICKS_CLIENT_ID`/`DATABRICKS_CLIENT_SECRET`, or code running inside
+Databricks. The SDK checks all of those before it reads `~/.databrickscfg`.
+On a laptop with more than one profile, leaving it unset fails with
+`Use --profile to specify which profile to use`.
 
 ## Next
 
