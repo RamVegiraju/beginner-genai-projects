@@ -33,15 +33,13 @@ the transcript and keeps the few facts still worth knowing next month.
 **First time?** Do [SETUP.md](../SETUP.md) first — install the CLI, log in,
 and create the virtual environment. Five minutes, once for the whole series.
 
-Then install this sample's dependencies, **from the repo root**:
-
-```bash
-uv pip install --python .venv/bin/python -r 04-agent-memory/requirements.txt
-```
-
 ## Run
 
+Open a terminal at the repo root and paste the whole block:
+
 ```bash
+export DATABRICKS_PROFILE=genai-series   # once per terminal
+uv pip install --python .venv/bin/python -r 04-agent-memory/requirements.txt
 cd 04-agent-memory
 ../.venv/bin/streamlit run app.py
 ```

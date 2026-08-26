@@ -21,15 +21,13 @@ sidebar and watch the list grow.
 **First time?** Do [SETUP.md](../SETUP.md) first — install the CLI, log in,
 and create the virtual environment. Five minutes, once for the whole series.
 
-Then install this sample's dependencies, **from the repo root**:
-
-```bash
-uv pip install --python .venv/bin/python -r 02-streamlit-chatbot/requirements.txt
-```
-
 ## Run
 
+Open a terminal at the repo root and paste the whole block:
+
 ```bash
+export DATABRICKS_PROFILE=genai-series   # once per terminal
+uv pip install --python .venv/bin/python -r 02-streamlit-chatbot/requirements.txt
 cd 02-streamlit-chatbot
 ../.venv/bin/streamlit run app.py
 ```

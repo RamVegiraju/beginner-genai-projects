@@ -30,21 +30,18 @@ of an eval set. The ten questions in `evaluate.py` are just questions.
 **First time?** Do [SETUP.md](../SETUP.md) first — install the CLI, log in,
 and create the virtual environment. Five minutes, once for the whole series.
 
-Then install this sample's dependencies, **from the repo root**:
-
-```bash
-uv pip install --python .venv/bin/python -r 06-mlflow-evals/requirements.txt
-```
-
 Both `langchain` and `databricks-agents` are required. MLflow's LangChain
 autologging imports the top-level `langchain` package, while the built-in
 Databricks judges use `databricks-agents`.
 
 ## Run
 
-First, record a trace:
+First, record a trace. Open a terminal at the repo root and paste the whole
+block:
 
 ```bash
+export DATABRICKS_PROFILE=genai-series   # once per terminal
+uv pip install --python .venv/bin/python -r 06-mlflow-evals/requirements.txt
 cd 06-mlflow-evals
 ../.venv/bin/python app.py
 ```
@@ -53,7 +50,7 @@ Open the experiment it prints. You will see the model call, the tool call with
 its arguments and result, and the tokens it cost. **Do this before scoring
 anything** — you cannot debug what you cannot see.
 
-Then score the agent:
+Then score the agent — same terminal, still inside `06-mlflow-evals`:
 
 ```bash
 ../.venv/bin/python evaluate.py

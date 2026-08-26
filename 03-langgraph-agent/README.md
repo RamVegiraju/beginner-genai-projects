@@ -28,18 +28,16 @@ entirely. Ask about two cities and it calls the tool twice.
 **First time?** Do [SETUP.md](../SETUP.md) first — install the CLI, log in,
 and create the virtual environment. Five minutes, once for the whole series.
 
-Then install this sample's dependencies, **from the repo root**:
-
-```bash
-uv pip install --python .venv/bin/python -r 03-langgraph-agent/requirements.txt
-```
-
 No API key is needed for the weather data — [Open-Meteo](https://open-meteo.com/)
 is free and open.
 
 ## Run
 
+Open a terminal at the repo root and paste the whole block:
+
 ```bash
+export DATABRICKS_PROFILE=genai-series   # once per terminal
+uv pip install --python .venv/bin/python -r 03-langgraph-agent/requirements.txt
 cd 03-langgraph-agent
 ../.venv/bin/python agent.py
 ```

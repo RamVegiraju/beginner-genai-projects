@@ -32,22 +32,20 @@ at a time as they do together, on the same one process.
 **First time?** Do [SETUP.md](../SETUP.md) first — install the CLI, log in,
 and create the virtual environment. Five minutes, once for the whole series.
 
-Then install this sample's dependencies, **from the repo root**:
-
-```bash
-uv pip install --python .venv/bin/python -r 05-fastapi-server/requirements.txt
-```
-
 ## Run
 
-Start the server in one terminal:
+**Terminal 1 — the server.** Open it at the repo root and paste the whole
+block:
 
 ```bash
+export DATABRICKS_PROFILE=genai-series   # once per terminal
+uv pip install --python .venv/bin/python -r 05-fastapi-server/requirements.txt
 cd 05-fastapi-server
 ../.venv/bin/uvicorn server:app
 ```
 
-Then run the load test in another:
+**Terminal 2 — the load test.** Also from the repo root. No credentials here;
+this one only talks to your local server:
 
 ```bash
 cd 05-fastapi-server
