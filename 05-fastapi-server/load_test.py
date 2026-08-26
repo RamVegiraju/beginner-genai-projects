@@ -1,13 +1,8 @@
-"""Show what async serving buys you.
+"""Send concurrent traffic at the running server.
 
-The same eight questions, sent two ways to the same endpoint:
-
-  one at a time   wait for each reply before sending the next
-  all at once     send them together and let the server overlap the waiting
-
-Agent inference is mostly waiting on the model, so the second one finishes in
-about the time of a single request. That gap is the reason to serve agents
-asynchronously.
+Eight questions go out together. Agent inference is mostly waiting -- on the
+model, on the network -- so one process can carry all eight by overlapping
+the waiting.
 
 Run the server first:  uvicorn server:app
 Then:                  python load_test.py
@@ -32,25 +27,11 @@ QUESTIONS = [
 ]
 
 
-async def ask(client: httpx.AsyncClient, question: str) -> str:
-    """Send one question to /chat and return the reply."""
+async def ask(client: httpx.AsyncClient, question: str) -> float:
+    """Send one question to /chat and return how long it took."""
+    start = time.perf_counter()
     response = await client.post(f"{URL}/chat", json={"message": question})
     response.raise_for_status()
-    return response.json()["reply"]
-
-
-async def one_at_a_time(client: httpx.AsyncClient) -> float:
-    """Send each question only after the previous reply arrives."""
-    start = time.perf_counter()
-    for question in QUESTIONS:
-        await ask(client, question)
-    return time.perf_counter() - start
-
-
-async def all_at_once(client: httpx.AsyncClient) -> float:
-    """Send every question together and wait for the last one."""
-    start = time.perf_counter()
-    await asyncio.gather(*(ask(client, question) for question in QUESTIONS))
     return time.perf_counter() - start
 
 
@@ -61,14 +42,14 @@ async def main() -> None:
         except httpx.HTTPError:
             sys.exit(f"No server at {URL}. Start it with:  uvicorn server:app")
 
-        serial = await one_at_a_time(client)
-        concurrent = await all_at_once(client)
+        start = time.perf_counter()
+        durations = await asyncio.gather(*(ask(client, q) for q in QUESTIONS))
+        wall = time.perf_counter() - start
 
-        print(f"\n{len(QUESTIONS)} questions, same endpoint:\n")
-        print(f"  one at a time   {serial:5.1f}s")
-        print(f"  all at once     {concurrent:5.1f}s")
-        print(f"\n{serial / concurrent:.1f}x faster, on one process and one thread.")
-        print("The server spent the waiting on other people's requests.")
+        print(f"\n{len(QUESTIONS)} concurrent requests to /chat:\n")
+        print(f"  all replies in   {wall:5.1f}s")
+        print(f"  slowest single   {max(durations):5.1f}s")
+        print("\nThey overlap, so the set costs about what its slowest request costs.")
 
         # The graph can do the same fan-out server-side, in one call.
         start = time.perf_counter()

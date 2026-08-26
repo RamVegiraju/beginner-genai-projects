@@ -1,11 +1,11 @@
 # 5 — Serving the agent with FastAPI
 
-Samples 2 and 4 ran your agent for one person, in one browser tab. This turns
-the LangGraph agent into an API that many people can call at once.
+Samples 2 and 4 ran your agent for one person, in one browser tab. This puts
+the LangGraph agent behind an HTTP API, so anything can call it — a web app, a
+job, another service.
 
-Agent inference is almost all *waiting* — the model is thinking, a tool is
-calling an API, the network is in flight. Async is how one process serves
-everyone through that waiting instead of one at a time.
+Agent inference is almost all *waiting*: the model is thinking, a tool is
+calling an API, the network is in flight. That shapes how you serve it.
 
 ## What this sample showcases
 
@@ -23,9 +23,6 @@ hand-roll:
 
 **3. The node has to await too.** `async def` on the endpoint does nothing on
 its own — the work inside it must yield, or the server still blocks.
-
-**4. Waiting is the whole opportunity.** Eight questions take 8x as long one
-at a time as they do together, on the same one process.
 
 ## Setup
 
@@ -53,24 +50,20 @@ cd 05-fastapi-server
 ```
 
 ```
-8 questions, same endpoint:
+8 concurrent requests to /chat:
 
-  one at a time    13.3s
-  all at once       2.2s
+  all replies in     2.2s
+  slowest single     2.2s
 
-6.1x faster, on one process and one thread.
+They overlap, so the set costs about what its slowest request costs.
 
-/chat/batch (graph.abatch, one request)    1.9s
+/chat/batch (graph.abatch, one request)    2.5s
   returned 8 replies
 ```
 
-Same endpoint, same model, same eight questions. Sent together, they finish in
-about the time of a single request, because the server used each wait to work
-on somebody else's.
-
-Your exact timings will differ — they depend on network and model latency. The
-speedup lands somewhere around 5x on a typical run. What matters is the shape:
-sending them together costs roughly one request's worth of time.
+Timings depend on your network and the model, so yours will differ. The point
+is the relationship between the two numbers: eight requests cost about what
+one costs, because the server spent each wait on somebody else's work.
 
 ## The endpoints
 
@@ -96,7 +89,7 @@ data: {"token": " are you today"}
 The caller sees the first words immediately — sample 1's streaming, now over
 HTTP.
 
-## The mistake to avoid
+## Awaiting is what makes it concurrent
 
 `async def` on the endpoint is not what makes anything concurrent. The work
 inside has to yield. This node awaits, so the server can switch away while the
@@ -122,12 +115,33 @@ If you are stuck with a library that has no async version, do not fake it with
 `async def`. Use a plain `def` endpoint and let FastAPI run it in a thread
 pool, or wrap the call in `starlette.concurrency.run_in_threadpool`.
 
+## Taking it to production
+
+This sample stays deliberately small: one process, no limits, no retries. The
+primitives you add first, roughly in the order they start to matter:
+
+| When you need to | Reach for |
+|---|---|
+| Do I/O without blocking the loop | an async client and `await` — `graph.ainvoke`, `llm.ainvoke`, `httpx.AsyncClient` |
+| Fan out work inside one request | `graph.abatch(...)`, or `asyncio.gather` / `asyncio.TaskGroup` for mixed work |
+| Keep unbounded load off the model | an `asyncio.Semaphore` around the model call, and a 429 once it is full |
+| Give up on a slow upstream | `asyncio.timeout(...)` plus a client-side timeout, so one hung call cannot pin a request forever |
+| Call a library with no async version | `starlette.concurrency.run_in_threadpool`, or `asyncio.to_thread` |
+| Reuse connections instead of reopening them | one long-lived `httpx.AsyncClient` on `app.state`, sized with `httpx.Limits(...)` |
+| Use more than one CPU core | more uvicorn worker processes — after the loop is non-blocking, never instead of it |
+| Let in-flight requests finish on deploy | the `lifespan` handler this sample already has |
+
+Two of those are easy to get backwards. A semaphore is there to protect the
+*model endpoint* from your server, so size it against that endpoint's rate
+limit rather than against your traffic. And workers multiply processes, not
+concurrency — if a blocking call is holding the loop, four workers just block
+four times.
+
 ## Notes
 
 - The graph is compiled in a `lifespan` handler rather than at import, so the
   module stays importable without credentials.
-- Run it with the default single worker. Adding workers hides a blocking
-  server by running several copies of it, which is not the same as fixing it.
+- Run it with the default single worker; the table above says when more help.
 - FastAPI generates docs at `http://localhost:8000/docs` from the request and
   response models — you can call every endpoint from the browser.
 
