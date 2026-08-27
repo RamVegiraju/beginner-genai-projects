@@ -138,6 +138,8 @@ async def chat_batch(body: BatchRequest, request: Request) -> BatchResponse:
     """
     graph: CompiledStateGraph = request.app.state.graph
     try:
+        # abatch runs the graph once per input, concurrently, and returns the
+        # finished states in the order they were passed in.
         states = await graph.abatch(
             [{"messages": [HumanMessage(message)]} for message in body.messages]
         )
@@ -157,6 +159,9 @@ async def chat_stream(body: ChatRequest, request: Request) -> StreamingResponse:
     graph: CompiledStateGraph = request.app.state.graph
 
     async def events() -> AsyncIterator[str]:
+        # stream_mode="messages" emits 2-tuples of (token, metadata) for every
+        # model call inside any node. We want the text, so the metadata -- which
+        # node produced it, and on which run -- is discarded here.
         async for chunk, _metadata in graph.astream(
             {"messages": [HumanMessage(body.message)]}, stream_mode="messages"
         ):

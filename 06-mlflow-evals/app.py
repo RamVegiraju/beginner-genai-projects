@@ -122,6 +122,8 @@ def _agent():
     # The same two-node loop as sample 3: the model decides, the tools run,
     # and control goes back to the model to write the answer.
     return (
+        # The same model -> tools -> model loop as sample 3, which comments it
+        # line by line. Here it exists so there is something worth tracing.
         StateGraph(MessagesState)
         .add_node("agent", agent)
         .add_node("tools", ToolNode([look_up_order]))

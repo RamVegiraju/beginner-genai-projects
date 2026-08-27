@@ -52,6 +52,9 @@ def build():
     # checkpointer does not, so they cannot share a connection.
     # check_same_thread=False is required: Streamlit and LangGraph use
     # different threads.
+    # SqliteSaver is the demo-grade checkpointer -- its own docs call it
+    # "lightweight, synchronous... demos and small projects". Swap in Postgres
+    # for anything real; thread_id and the node code stay exactly the same.
     checkpointer = SqliteSaver(sqlite3.connect(DB, check_same_thread=False))
     store = SqliteStore(sqlite3.connect(DB, check_same_thread=False, isolation_level=None))
     store.setup()
@@ -59,6 +62,14 @@ def build():
     # Name the parameter `store` and annotate it `BaseStore`: that is how
     # LangGraph knows to inject the store the graph was compiled with.
     def agent(state: MessagesState, store: BaseStore) -> dict:
+        """Answer using both memories.
+
+        `state["messages"]` already holds the whole conversation: the
+        checkpointer loaded it from SQLite before this node ran, keyed by the
+        thread_id in the config. That is why the caller sends one message per
+        turn instead of resending the transcript, and why the node returns one
+        message rather than the list.
+        """
         profile = [item.value["fact"] for item in store.search(NAMESPACE, limit=100)]
 
         system = "You are a helpful assistant."
@@ -82,6 +93,11 @@ graph, store, llm = build()
 
 
 def thread_config(thread_id: str) -> RunnableConfig:
+    """Name the conversation the checkpointer should load and save.
+
+    Every read and write goes through this. Same thread_id, same conversation,
+    across restarts. A new one starts blank.
+    """
     return {"configurable": {"thread_id": thread_id}}
 
 

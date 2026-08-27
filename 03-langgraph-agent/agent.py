@@ -7,6 +7,12 @@ something up -- no prompt fixes a missing fact.
 A tool fixes it. We hand the model a Python function it can choose to call.
 LangGraph runs the loop: model -> tool -> model -> answer.
 
+Two calls in this file are easy to confuse:
+
+  llm.invoke()    calls the model. It happens in one place: the `agent` node.
+  graph.invoke()  runs the graph. It calls no model itself -- it moves between
+                  nodes until one of them stops asking for tools.
+
 Run:  python agent.py
 """
 
@@ -78,7 +84,16 @@ tools = [get_weather]
 
 # --- The model --------------------------------------------------------------
 # Same endpoint as samples 1 and 2, reached through LangChain this time.
-# .bind_tools() tells the model what it's allowed to call.
+#
+# .bind_tools() runs nothing. It turns each function into a JSON schema and
+# attaches it to every request, so the model knows what it may ask for. When
+# the model wants one it replies with a `tool_calls` field -- a *request* to
+# run something, not a result. Executing it is ToolNode's job below.
+#
+# That is why the same list is passed in two places, for two different jobs:
+#
+#   bind_tools(tools)   the schemas the model reads
+#   ToolNode(tools)     the callables the graph runs
 w = WorkspaceClient(profile=PROFILE)
 token = w.config.authenticate()["Authorization"].removeprefix("Bearer ")
 llm = ChatOpenAI(
@@ -98,21 +113,36 @@ llm = ChatOpenAI(
 #
 # The loop matters: after a tool runs, control returns to the model so it can
 # read the result and either answer or call another tool.
+#
+# MessagesState is a TypedDict with one key, `messages`, whose reducer is
+# `add_messages`. A node returns only what is NEW and LangGraph appends it, so
+# the list grows into the full transcript without anyone rebuilding it.
 
 
 def agent(state: MessagesState) -> dict:
-    """Ask the model what to do next, given the conversation so far."""
+    """Ask the model what to do next, given the conversation so far.
+
+    This is the only model call in the file. The node runs once per pass
+    through the loop: first to decide whether a tool is needed, then again on
+    the way back, to turn the tool result into an answer.
+
+    Returning one message instead of the whole list is deliberate --
+    `add_messages` appends it to whatever is already in state.
+    """
     return {"messages": [llm.invoke([SystemMessage(SYSTEM)] + state["messages"])]}
 
 
 graph = (
     StateGraph(MessagesState)
     .add_node("agent", agent)
-    # ToolNode runs whichever tool the model asked for and appends the result.
+    # ToolNode reads `tool_calls` off the last message, runs those tools -- in
+    # parallel if the model asked for several -- and appends one ToolMessage
+    # per call.
     .add_node("tools", ToolNode(tools))
     .add_edge(START, "agent")
-    # tools_condition inspects the last message: if the model requested a tool
-    # it routes to "tools", otherwise it ends.
+    # tools_condition inspects the last message and returns the literal string
+    # "tools" if it carries tool calls, otherwise "__end__". Both are node
+    # names, which is why no path map is needed here.
     .add_conditional_edges("agent", tools_condition)
     # After the tool runs, go back to the model. This is what makes it a loop.
     .add_edge("tools", "agent")
@@ -120,10 +150,18 @@ graph = (
 )
 
 
+# Written out longhand on purpose -- the point of the sample is to see the loop.
+# LangChain ships an equivalent prebuilt: `from langchain.agents import create_agent`,
+# then `create_agent(llm, tools)`. (LangGraph's older `create_react_agent` is
+# deprecated in favour of it.) This sample does not install `langchain`.
+
+
 if __name__ == "__main__":
     question = "I'm flying out of Chicago today. Should I expect weather delays?"
     print(f"user> {question}\n")
 
+    # Runs the graph, not the model: START -> agent -> tools -> agent -> END.
+    # For this question the agent node runs twice, so two model calls in total.
     result = graph.invoke({"messages": [{"role": "user", "content": question}]})
 
     # Print every step so the loop is visible instead of magic.
