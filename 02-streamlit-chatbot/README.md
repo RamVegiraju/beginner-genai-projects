@@ -98,6 +98,26 @@ stream = client.chat.completions.create(
 st.session_state.messages.append({"role": "assistant", "content": reply})
 ```
 
+### What the toggle changes
+
+Only step 2. Steps 1 and 3 always run, so the stored list grows either way:
+
+```python
+history = st.session_state.messages if send_history else st.session_state.messages[-1:]
+```
+
+`[-1:]` is a slice — it copies the newest message, the question you just
+typed, into a one-item list for the request. Nothing leaves `session_state`.
+
+| | Stored | Sent |
+|---|---|---|
+| Ticked | 4 | 4 |
+| Unticked | 4 | 1 |
+
+Untick it and the model gets one question with no context, so every turn looks
+like a brand-new conversation. Tick it again and the older messages are still
+there to send.
+
 Two Streamlit details worth knowing, because they surprise people:
 
 - **Streamlit re-runs the entire file** top to bottom on every interaction.

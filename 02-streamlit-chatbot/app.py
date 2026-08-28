@@ -38,7 +38,7 @@ client = get_client()
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Turn this off to send only the newest message. The model then has nothing to
+# Untick this to send only the newest message. The model then has nothing to
 # read back and the "memory" vanishes -- which is the point: the list is the
 # memory, not the model.
 with st.sidebar:
@@ -56,7 +56,17 @@ if prompt := st.chat_input("Ask me anything"):
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # 2. send the ENTIRE list, every time -- this is the whole trick
+    # 2. send the ENTIRE list, every time -- this is the whole trick.
+    #
+    # `[-1:]` is a slice: it COPIES the newest message into a one-item list for
+    # the request. Nothing is removed from st.session_state.messages, so the
+    # stored conversation grows either way. Say the list holds:
+    #
+    #     user "Who is Federer?" / assistant "..." / user "What did I just ask?"
+    #
+    #   ticked   -> all three go out, and the model can read the answer back
+    #   unticked -> only the last goes out, so it has never seen the first two
+    #               and every turn looks like a brand-new conversation
     history = st.session_state.messages if send_history else st.session_state.messages[-1:]
     with st.chat_message("assistant"):
         stream = client.chat.completions.create(
