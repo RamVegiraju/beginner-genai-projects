@@ -21,7 +21,25 @@ sidebar and watch the list grow.
 **First time?** Do [SETUP.md](../SETUP.md) first — install the CLI, log in,
 and create the virtual environment. Five minutes, once for the whole series.
 
-## Run
+## New to Streamlit? Start here
+
+`intro.py` is a one-page tour of the syntax — headings, widgets, layout, and
+the rerun model. It calls no model, so it needs no credentials and starts
+instantly:
+
+```bash
+uv pip install --python .venv/bin/python -r 02-streamlit-chatbot/requirements.txt
+cd 02-streamlit-chatbot
+../.venv/bin/streamlit run intro.py
+```
+
+The one idea worth taking from it: **every interaction re-runs the whole
+script from the top.** A plain variable is rebuilt each time, so it cannot
+count past one. `st.session_state` survives, which is why the chatbot keeps
+its conversation there. The page has both buttons side by side so you can
+watch one work and the other not.
+
+## Run the chatbot
 
 Open a terminal at the repo root and paste the whole block:
 
