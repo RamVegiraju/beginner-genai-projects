@@ -38,6 +38,12 @@ client = get_client()
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+# Turn this off to send only the newest message. The model then has nothing to
+# read back and the "memory" vanishes -- which is the point: the list is the
+# memory, not the model.
+with st.sidebar:
+    send_history = st.checkbox("Send full history", value=True)
+
 # Re-draw the conversation so far. The screen is rebuilt from this list on
 # every re-run, so what you see is always just the list rendered.
 for message in st.session_state.messages:
@@ -51,10 +57,11 @@ if prompt := st.chat_input("Ask me anything"):
         st.markdown(prompt)
 
     # 2. send the ENTIRE list, every time -- this is the whole trick
+    history = st.session_state.messages if send_history else st.session_state.messages[-1:]
     with st.chat_message("assistant"):
         stream = client.chat.completions.create(
             model=MODEL,
-            messages=st.session_state.messages,
+            messages=history,
             max_tokens=500,
             stream=True,
         )
@@ -67,11 +74,12 @@ if prompt := st.chat_input("Ask me anything"):
     # 3. append the reply, so it's there for the next turn
     st.session_state.messages.append({"role": "assistant", "content": reply})
 
-# Proof that the "memory" is just a list being resent. Open it and watch it
-# grow -- every message in here is sent on every single turn, and you pay for
-# all of it each time.
+# Proof that the "memory" is just a list being resent. Watch it grow: with the
+# toggle on, everything here goes out on every turn, and you pay for all of it
+# each time.
 with st.sidebar:
-    st.caption(f"Sent to the model every turn: {len(st.session_state.messages)} messages")
+    total = len(st.session_state.messages)
+    st.caption(f"Sent on the next turn: {total if send_history else min(total, 1)} of {total}")
     st.json(st.session_state.messages, expanded=False)
     if st.button("Clear"):
         st.session_state.messages = []

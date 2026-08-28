@@ -64,9 +64,17 @@ What's my name?
 It answers correctly — because we resent the whole conversation, not because
 the model remembered anything.
 
-**Now open the sidebar.** Every message is listed there, and *all of them* are
-sent on every single turn. Two things follow, and they drive the rest of the
-series:
+**Now prove it.** Untick **Send full history** in the sidebar and ask again:
+
+```
+What's my name?
+```
+
+It has no idea. Same model, same code — only the newest message was sent, so
+there was nothing to read back. Tick it again and the answer comes back.
+
+**Then look at what the fix costs.** The sidebar lists every message, and all
+of them go out on every turn:
 
 - The list only grows, so each turn costs more than the last.
 - Refresh the browser and it's gone. This memory lives in RAM.
@@ -100,7 +108,11 @@ Two Streamlit details worth knowing, because they surprise people:
 
 ## Next
 
-Close the tab and the conversation is gone. Making it survive — across
-restarts, across days — is [sample 4](../04-agent-memory/). First,
-[sample 3](../03-langgraph-agent/) gives the model tools so it can do more than
-talk.
+Resending the list is the cheapest memory there is: it lives in RAM, it only
+grows, and it treats every message as equally worth keeping.
+
+[Sample 4](../04-agent-memory/) replaces it with two that last — the
+conversation saved to disk under a `thread_id`, and a short profile of the
+user distilled from it and carried into every future chat. First,
+[sample 3](../03-langgraph-agent/) gives the model tools so it can do more
+than talk.
