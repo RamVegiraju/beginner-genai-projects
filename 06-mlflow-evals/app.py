@@ -1,8 +1,8 @@
-"""The app we are going to measure: a LangGraph support agent with one tool.
+"""The app we are going to measure: a LangChain support agent with one tool.
 
-Same graph as sample 3 -- model, tool, loop -- pointed at order lookups
-instead of weather. Anything about a specific order has to come from the
-`look_up_order` tool, because the model has no other way to know it.
+Like the first half of sample 3, `create_agent` supplies the standard
+model -> tool -> model loop. This sample can therefore focus on evaluation
+instead of rebuilding orchestration it does not need to customize.
 
 Run this file directly to send one question through and record a trace.
 """
@@ -12,11 +12,10 @@ import os
 
 import mlflow
 from databricks.sdk import WorkspaceClient
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain.agents import create_agent
+from langchain_core.messages import HumanMessage
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
-from langgraph.graph import START, MessagesState, StateGraph
-from langgraph.prebuilt import ToolNode, tools_condition
 from mlflow.langchain import autolog as trace_langchain_calls
 
 MODEL = os.environ.get("SERVING_ENDPOINT", "databricks-claude-haiku-4-5")
@@ -106,32 +105,15 @@ def configure_mlflow() -> str:
 
 @functools.cache
 def _agent():
-    """Build the support agent graph. Compiled once and reused."""
+    """Build the support agent once and reuse its compiled LangGraph graph."""
     host, token = _credentials()
     llm = ChatOpenAI(
         model=MODEL,
         api_key=token,
         base_url=f"{host}/serving-endpoints",
         max_tokens=400,
-    ).bind_tools([look_up_order])
-
-    def agent(state: MessagesState) -> dict:
-        system = SystemMessage(PROMPT)
-        return {"messages": [llm.invoke([system] + state["messages"])]}
-
-    # The same two-node loop as sample 3: the model decides, the tools run,
-    # and control goes back to the model to write the answer.
-    return (
-        # The same model -> tools -> model loop as sample 3, which comments it
-        # line by line. Here it exists so there is something worth tracing.
-        StateGraph(MessagesState)
-        .add_node("agent", agent)
-        .add_node("tools", ToolNode([look_up_order]))
-        .add_edge(START, "agent")
-        .add_conditional_edges("agent", tools_condition)
-        .add_edge("tools", "agent")
-        .compile()
     )
+    return create_agent(model=llm, tools=[look_up_order], system_prompt=PROMPT)
 
 
 @mlflow.trace

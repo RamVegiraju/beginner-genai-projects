@@ -1,6 +1,6 @@
 # 6 — Evaluating with MLflow
 
-"It seems good" is not a quality bar. This sample measures a LangGraph agent
+"It seems good" is not a quality bar. This sample measures a LangChain agent
 instead of guessing at it, using Databricks-managed MLflow.
 
 The agent is customer support with one tool, `look_up_order`. Anything about a
@@ -81,8 +81,9 @@ tool in `app.py` is decorated:
 def look_up_order(order_id: str) -> dict[str, str]: ...
 ```
 
-LangGraph's `ToolNode` emits the `TOOL` span for you. Without that span type
-the scorer sees an agent that never used a tool.
+`create_agent()` runs on LangGraph internally, and MLflow's LangChain
+autologging records its tool execution as a `TOOL` span. Without that span type
+the scorer would see an agent that never used a tool.
 
 ### Your Python: `grounded_in_lookup`
 
@@ -123,7 +124,8 @@ judge gets.
   not yet understood — most likely contention between this sample's
   `langchain.autolog()` and the tracing MLflow enables during evaluation.
   A completed run is always correct; a stalled one never starts.
-- **The graph is compiled once** (`@functools.cache`). MLflow scores rows in
+- **The agent is created once** (`@functools.cache`). `create_agent()` returns
+  a compiled LangGraph graph. MLflow scores rows in
   several threads, and building a fresh client per call inside them is both
   wasteful and a source of flakiness.
 - **One token is minted up front** in `configure_mlflow()` and shared. Without
