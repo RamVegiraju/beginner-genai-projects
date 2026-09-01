@@ -48,9 +48,16 @@ Output (your weather will differ — the tool fetches it live):
 user> I'm flying out of Chicago today. Should I expect weather delays?
 
 [AIMessage] calling get_weather({'city': 'Chicago'})
-[ToolMessage] returned: Chicago, US: 64.8F, precipitation 0.0mm, wind 5.1mph
+[ToolMessage] returned: Chicago, US: 77.1F, precipitation 0.0mm, wind 3.4mph
 
-bot > Good news! The weather in Chicago today looks favorable for flying...
+bot > Here are the current weather conditions in Chicago:
+- **Temperature:** 77.1F
+- **Precipitation:** 0.0 mm (no rain)
+- **Wind:** 3.4 mph
+
+However, weather readings alone cannot determine whether airport or airline
+delays will occur. To get accurate information about potential delays, I
+recommend checking directly with your airline or with Chicago's airports...
 ```
 
 Every step is printed on purpose. You can see the model *decide* to call the
