@@ -148,20 +148,43 @@ Same shape; `create_agent` just names the first node `model`. So `agent.py`
 isn't a lower-level alternative to the prebuilt — it's what the prebuilt
 builds, with the lid off.
 
-That matters the moment you want something the standard loop doesn't do:
+So why write it out?
 
-- put a node **between** the model and the tools — to check a budget, ask a
-  human to approve, or log the request
-- **cap the loop** so a stuck agent can't call tools forever
-- **route** to a cheaper model for easy turns and an expensive one for hard turns
-- **edit state** on the way past — trim old messages, inject a retrieved document
+**Not to customize the loop.** That's the trap. If you want to cap the number
+of model calls, ask a human to approve a tool, fall back to another model, or
+trim old messages, `create_agent` already takes middleware for it:
 
-You can't reach inside a single function call to do any of that. You can add a
-node to a graph. That's the trade: `create_agent` for the common case, the
-explicit graph when you need the control.
+```python
+from langchain.agents.middleware import ModelCallLimitMiddleware
 
-**Sample 4 needs exactly this**, which is why the series continues with
-LangGraph from here.
+agent = create_agent(llm, [get_weather], middleware=[ModelCallLimitMiddleware(run_limit=3)])
+```
+
+`HumanInTheLoopMiddleware`, `ModelFallbackMiddleware`, `SummarizationMiddleware`
+and a dozen others ship in the box. Hand-rolling a graph to get any of these is
+strictly more work for a worse result.
+
+Write the graph out for two reasons instead:
+
+**1. To understand what an agent is.** That's this sample. "Agent" sounds like a
+thing; it's a loop. Two nodes and an edge that goes back. Once you've seen that,
+`create_agent` stops being magic and becomes a shortcut you're choosing.
+
+**2. When you need a different shape, not a tuned loop.** `create_agent` builds
+one topology: a model that calls tools until it stops. A graph is what you reach
+for when the shape itself is different —
+
+- several agents with a supervisor routing between them
+- an agent as *one step* in a longer pipeline (fetch → classify → agent → validate)
+- branches that fan out in parallel and merge
+- steps that use no model at all
+
+And these compose: `create_agent` returns a graph, so you can drop one in as a
+node inside a bigger `StateGraph`.
+
+**Sample 4 is case 2.** Its graph is a single node with no tools, plus a
+checkpointer and a store for memory — a different shape, not a customized agent
+loop. That's why the series stays on LangGraph from here.
 
 ## Try this
 

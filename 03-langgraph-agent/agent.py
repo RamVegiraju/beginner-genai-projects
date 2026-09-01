@@ -7,10 +7,15 @@ LangGraph graph -- with the same shape:
 
     START -> agent -> tools -> agent -> END
 
-Why bother? Because once the graph is yours, you can change it: add a node
-between the model and the tools, route to a different model, cap the loop, edit
-state on the way past. Sample 4 does exactly this to add memory. You cannot
-reach inside a single function call to do that.
+Why bother? Not to customize the loop -- `create_agent` takes middleware for
+that (capping calls, human approval, model fallback), and using it beats
+hand-rolling every time.
+
+Bother for two other reasons. First, to see what an agent actually is: a loop,
+two nodes and an edge that goes back. Second, for when you need a different
+*shape* -- several agents with a supervisor, an agent as one step in a longer
+pipeline, branches that fan out. Sample 4 is that case: one node, no tools, plus
+a checkpointer for memory.
 
 Two calls in this file are easy to confuse:
 
