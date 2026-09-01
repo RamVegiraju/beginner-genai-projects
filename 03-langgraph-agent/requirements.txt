@@ -1,4 +1,5 @@
 databricks-sdk>=0.133.0
 langchain-openai>=1.0.0
+langchain>=1.0.0
 langgraph>=1.0.0
 requests>=2.32.0

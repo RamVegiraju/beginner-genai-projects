@@ -8,6 +8,7 @@ ROOT = Path(__file__).parents[1]
 SAMPLES = [
     ROOT / "01-first-llm-call" / "invoke.py",
     ROOT / "02-streamlit-chatbot" / "app.py",
+    ROOT / "03-langgraph-agent" / "simple_agent.py",
     ROOT / "03-langgraph-agent" / "agent.py",
     ROOT / "04-agent-memory" / "app.py",
     ROOT / "05-fastapi-server" / "server.py",

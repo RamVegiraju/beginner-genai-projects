@@ -1,11 +1,16 @@
 """
-Giving the model a tool: "will weather delay my flight?"
+The same agent as `simple_agent.py`, built by hand so you can see inside it.
 
-An LLM cannot know today's weather. Ask it directly and it will hedge or make
-something up -- no prompt fixes a missing fact.
+`create_agent` gave us the loop in one line. Here it is written out: two nodes
+and an edge that loops back. The result is the same kind of object -- a compiled
+LangGraph graph -- with the same shape:
 
-A tool fixes it. We hand the model a Python function it can choose to call.
-LangGraph runs the loop: model -> tool -> model -> answer.
+    START -> agent -> tools -> agent -> END
+
+Why bother? Because once the graph is yours, you can change it: add a node
+between the model and the tools, route to a different model, cap the loop, edit
+state on the way past. Sample 4 does exactly this to add memory. You cannot
+reach inside a single function call to do that.
 
 Two calls in this file are easy to confuse:
 
@@ -18,68 +23,17 @@ Run:  python agent.py
 
 import os
 
-import requests
 from databricks.sdk import WorkspaceClient
 from langchain_core.messages import SystemMessage
-from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 from langgraph.graph import START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
+from weather_tool import SYSTEM, get_weather
 
 MODEL = os.environ.get("SERVING_ENDPOINT", "databricks-claude-haiku-4-5")
 PROFILE = os.environ.get("DATABRICKS_PROFILE")
 
-SYSTEM = """Use the weather tool for current conditions. Only report facts the tool
-returns. Do not predict whether delays are likely or whether the readings will cause
-delays, and do not characterize the conditions as favorable or unfavorable for flying.
-Say that weather readings alone cannot determine airport or airline delays, then
-recommend checking the airline or airport for delay status."""
-
-
-# --- The tool ---------------------------------------------------------------
-# A tool is just a Python function. The @tool decorator exposes it to the
-# model, which reads the NAME, the TYPE HINTS, and the DOCSTRING to decide
-# when to call it. That docstring is not a comment -- it's the model's
-# instructions. Write it for the model, not for yourself.
-
-
-@tool
-def get_weather(city: str) -> str:
-    """Get the current weather for a city. Use this whenever the user asks
-    about weather, flights, or travel conditions."""
-    # Open-Meteo is free and needs no API key. Two calls: name -> coordinates,
-    # then coordinates -> conditions.
-    geo = requests.get(
-        "https://geocoding-api.open-meteo.com/v1/search",
-        params={"name": city, "count": 1},
-        timeout=10,
-    ).json()
-
-    if not geo.get("results"):
-        return f"Could not find a place called {city!r}."
-
-    place = geo["results"][0]
-
-    weather = requests.get(
-        "https://api.open-meteo.com/v1/forecast",
-        params={
-            "latitude": place["latitude"],
-            "longitude": place["longitude"],
-            "current": "temperature_2m,precipitation,wind_speed_10m",
-            "temperature_unit": "fahrenheit",
-            "wind_speed_unit": "mph",
-        },
-        timeout=10,
-    ).json()["current"]
-
-    return (
-        f"{place['name']}, {place.get('country_code', '')}: "
-        f"{weather['temperature_2m']}F, "
-        f"precipitation {weather['precipitation']}mm, "
-        f"wind {weather['wind_speed_10m']}mph"
-    )
-
-
+# The same tool and system prompt `simple_agent.py` uses.
 tools = [get_weather]
 
 # --- The model --------------------------------------------------------------
@@ -150,10 +104,18 @@ graph = (
 )
 
 
-# Written out longhand on purpose -- the point of the sample is to see the loop.
-# LangChain ships an equivalent prebuilt: `from langchain.agents import create_agent`,
-# then `create_agent(llm, tools)`. (LangGraph's older `create_react_agent` is
-# deprecated in favour of it.) This sample does not install `langchain`.
+# How close is this to the prebuilt? Nearly identical. `create_agent` returns a
+# CompiledStateGraph too, with the same nodes -- it just calls the first one
+# "model" instead of "agent":
+#
+#   simple_agent.py  ['__start__', 'model', 'tools', '__end__']
+#   agent.py         ['__start__', 'agent', 'tools', '__end__']
+#
+# So this is not a lower-level alternative to `create_agent`. It is what
+# `create_agent` builds, with the lid off.
+#
+# (LangGraph's older `create_react_agent` is deprecated in favour of
+# `langchain.agents.create_agent`. Use the latter.)
 
 
 if __name__ == "__main__":
