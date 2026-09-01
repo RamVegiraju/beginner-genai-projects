@@ -15,7 +15,7 @@ Each sample exists because the previous one hit a wall.
 |---|---|---|
 | 1 | [Talking to an LLM](01-first-llm-call/) | How do you call a model at all? Streaming vs non-streaming. |
 | 2 | [Streamlit chatbot](02-streamlit-chatbot/) | One question isn't a conversation, and a script isn't a product. |
-| 3 | [LangGraph agent](03-langgraph-agent/) | The model can't know today's weather. Give it tools. |
+| 3 | [LangChain → LangGraph agent](03-langgraph-agent/) | Start with a tool-calling agent, then add a custom review loop. |
 | 4 | [Memory](04-agent-memory/) | Close the tab and it forgets you. Persist the conversation, and distill what's worth keeping about the person. |
 | 5 | [FastAPI server](05-fastapi-server/) | One user at a time doesn't scale. Serve many at once. |
 | 6 | [MLflow evals](06-mlflow-evals/) | "It seems good" isn't a quality bar. Measure it. |

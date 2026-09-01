@@ -1,9 +1,8 @@
 """
-The tool, shared by both agents in this sample.
+The model setup and weather tool shared by both agents in this sample.
 
-`simple_agent.py` and `agent.py` build the SAME agent two different ways. Keeping
-the tool here means the only difference between those two files is the wiring --
-which is the whole point of the comparison.
+Keeping this plumbing here lets `simple_agent.py` focus on LangChain and
+`agent.py` focus on LangGraph's custom control flow.
 
 A tool is just a Python function. The @tool decorator exposes it to the model,
 which reads the NAME, the TYPE HINTS, and the DOCSTRING to decide when to call
@@ -11,14 +10,26 @@ it. That docstring is not a comment -- it's the model's instructions. Write it
 for the model, not for yourself.
 """
 
+import os
+
 import requests
+from databricks.sdk import WorkspaceClient
 from langchain_core.tools import tool
+from langchain_openai import ChatOpenAI
+
+MODEL = os.environ.get("SERVING_ENDPOINT", "databricks-claude-haiku-4-5")
+PROFILE = os.environ.get("DATABRICKS_PROFILE")
 
 
 @tool
 def get_weather(city: str) -> str:
-    """Get the current weather for a city. Use this whenever the user asks
-    about weather, flights, or travel conditions."""
+    """Get the current weather for a city.
+
+    Use this when a question depends on current weather conditions.
+
+    Args:
+        city: The city whose weather should be retrieved.
+    """
     # Open-Meteo is free and needs no API key. Two calls: name -> coordinates,
     # then coordinates -> conditions.
     geo = requests.get(
@@ -52,10 +63,17 @@ def get_weather(city: str) -> str:
     )
 
 
-# The system prompt is shared too. The tool reports weather; it knows nothing
-# about airline operations, so this keeps the answer honest about that.
-SYSTEM = """Use the weather tool for current conditions. Only report facts the tool
-returns. Do not predict whether delays are likely or whether the readings will cause
-delays, and do not characterize the conditions as favorable or unfavorable for flying.
-Say that weather readings alone cannot determine airport or airline delays, then
-recommend checking the airline or airport for delay status."""
+# The simple agent only needs one instruction: use live data for live weather.
+SYSTEM = "Use the weather tool for questions about current weather."
+
+
+def make_model() -> ChatOpenAI:
+    """Create a LangChain model connected to a Databricks serving endpoint."""
+    workspace = WorkspaceClient(profile=PROFILE)
+    token = workspace.config.authenticate()["Authorization"].removeprefix("Bearer ")
+    return ChatOpenAI(
+        model=MODEL,
+        api_key=token,
+        base_url=f"{workspace.config.host}/serving-endpoints",
+        max_tokens=500,
+    )

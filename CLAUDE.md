@@ -24,7 +24,7 @@ uv venv --python 3.12 .venv
 uv pip install --python .venv/bin/python -r 0N-sample/requirements.txt
 
 # then, from inside the sample directory
-cd 03-langgraph-agent && ../.venv/bin/python agent.py
+cd 03-langgraph-agent && ../.venv/bin/python simple_agent.py && ../.venv/bin/python agent.py
 cd 02-streamlit-chatbot && ../.venv/bin/streamlit run app.py   # also 04
 cd 05-fastapi-server && ../.venv/bin/uvicorn server:app        # then: python load_test.py
 cd 06-mlflow-evals && ../.venv/bin/python evaluate.py
