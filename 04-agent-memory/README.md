@@ -1,7 +1,8 @@
 # 4 — Memory
 
-Sample 2's chatbot kept the conversation in a Python list, so closing the tab
-erased it. This is the same chatbot with its memory moved to disk.
+Sample 2's chatbot kept the conversation in Streamlit session state, so ending
+that session or restarting the server erased it. This is the same chatbot with
+its memory moved to disk.
 
 "Remember me" turns out to be two different problems:
 
@@ -10,14 +11,14 @@ erased it. This is the same chatbot with its memory moved to disk.
 | **Answers** | "What did I just say?" | "How do you like your answers?" |
 | **Scoped to** | one conversation (`thread_id`) | one person (`user_id`) |
 | **Stored by** | a checkpointer | a store |
-| **Written** | every step, automatically | once, when a conversation ends |
+| **Written** | every graph super-step, automatically | once, when a conversation ends |
 | **Grows** | forever | barely |
 
 ## What this sample showcases
 
-**1. A checkpointer replaces the message list.** LangGraph loads the history
-before your node runs and saves the reply after, so you send one message per
-turn instead of resending everything by hand.
+**1. A checkpointer replaces the manually managed message list.** LangGraph
+loads the latest state before your node runs and saves the updated state after,
+so you send one new message per turn instead of resending everything yourself.
 
 **2. `thread_id` is the conversation.** Same id, same conversation — even
 after you restart the server. New id, blank slate.
@@ -26,7 +27,8 @@ after you restart the server. New id, blank slate.
 by thread, so it comes along into every new chat.
 
 **4. Distillation connects the two.** When a conversation ends, an LLM reads
-the transcript and keeps the few facts still worth knowing next month.
+the transcript and copies the few facts still worth knowing next month into
+the long-term store. The old thread remains available as checkpoint history.
 
 ## Setup
 
@@ -59,8 +61,9 @@ turn, so each turn costs a little more than the last.
 
 **2. Hit "End conversation".**
 
-The transcript collapses into two or three facts, and a fresh empty thread
-opens.
+Two or three durable facts are copied into the profile, and a fresh empty
+thread opens. The previous thread is no longer sent to the model, but its
+checkpoint history remains in SQLite.
 
 **3. Ask a new question.**
 
@@ -68,8 +71,9 @@ opens.
 What should I cook tonight?
 ```
 
-This conversation has no history at all — and you get vegetarian ideas for
-Seattle. Short-term memory was left behind; long-term memory came along.
+This new conversation has no message history — and you get vegetarian ideas
+for Seattle. Short-term memory stayed with the previous thread; long-term
+memory came along.
 
 **4. Restart the server.** Everything is still there. It is a SQLite file,
 not a variable in RAM.
@@ -100,9 +104,10 @@ profile stays small.
 
 ## Where it lives
 
-One file, `memory.db`, holding both memories. Delete it and the bot forgets
-you completely. Moving to Postgres later is a two-line change — `thread_id`,
-`user_id`, checkpointer, and store all stay the same.
+One file, `memory.db`, holds both kinds of memory. Stop the app and delete that
+file to make the demo forget everything. A production app would replace the
+SQLite implementations with a production database, while keeping the same
+`thread_id` and `user_id` concepts.
 
 ## Next
 

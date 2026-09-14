@@ -1,13 +1,15 @@
-"""
-A chatbot with two kinds of memory.
+"""A chatbot that demonstrates short-term and long-term memory.
 
-  SHORT-TERM   the messages in this conversation, keyed by thread_id.
-               Saved to SQLite by a checkpointer after every step.
+Short-term memory is the message history for one conversation. A LangGraph
+checkpointer saves graph state after each super-step and uses ``thread_id`` to
+load the latest state when that conversation continues.
 
-  LONG-TERM    a short profile of the user, keyed by user_id.
-               Written by distillation when a conversation ends.
+Long-term memory is a small user profile shared across conversations. A
+LangGraph store keeps these facts under ``user_id``. When a conversation ends,
+the app distills useful facts into this profile and starts a new thread. The
+old thread's checkpoints remain in SQLite as history.
 
-Run:  streamlit run app.py
+Run with ``streamlit run app.py``.
 """
 
 import os
@@ -17,11 +19,12 @@ from pathlib import Path
 import streamlit as st
 from databricks.sdk import WorkspaceClient
 from distill import distill, remember
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import START, MessagesState, StateGraph
+from langgraph.graph.state import CompiledStateGraph
 from langgraph.store.base import BaseStore
 from langgraph.store.sqlite import SqliteStore
 
@@ -37,8 +40,16 @@ DB = str(Path(__file__).parent / "memory.db")
 
 
 @st.cache_resource
-def build():
-    """Create the model client, the two memories, and the graph. Runs once."""
+def build() -> tuple[CompiledStateGraph, SqliteStore, ChatOpenAI]:
+    """Build and cache the model, memory backends, and graph.
+
+    Streamlit reruns this file after every interaction. ``st.cache_resource``
+    keeps these expensive, shared resources alive instead of rebuilding them
+    on every rerun.
+
+    Returns:
+        The compiled graph, long-term memory store, and chat model client.
+    """
     w = WorkspaceClient(profile=PROFILE)
     token = w.config.authenticate()["Authorization"].removeprefix("Bearer ")
     llm = ChatOpenAI(
@@ -61,14 +72,20 @@ def build():
 
     # Name the parameter `store` and annotate it `BaseStore`: that is how
     # LangGraph knows to inject the store the graph was compiled with.
-    def agent(state: MessagesState, store: BaseStore) -> dict:
-        """Answer using both memories.
+    def agent(state: MessagesState, store: BaseStore) -> dict[str, list[BaseMessage]]:
+        """Generate one reply using short-term and long-term memory.
 
-        `state["messages"]` already holds the whole conversation: the
-        checkpointer loaded it from SQLite before this node ran, keyed by the
-        thread_id in the config. That is why the caller sends one message per
-        turn instead of resending the transcript, and why the node returns one
-        message rather than the list.
+        Before this node runs, the checkpointer restores the latest messages
+        for the configured ``thread_id``. The node also reads the user's
+        cross-thread profile from the store and adds it to the system prompt.
+
+        Args:
+            state: Current graph state, including this thread's messages.
+            store: Long-term memory store injected by LangGraph.
+
+        Returns:
+            A state update containing only the new assistant message. The
+            ``MessagesState`` reducer appends it to the conversation.
         """
         profile = [item.value["fact"] for item in store.search(NAMESPACE, limit=100)]
 
@@ -93,16 +110,26 @@ graph, store, llm = build()
 
 
 def thread_config(thread_id: str) -> RunnableConfig:
-    """Name the conversation the checkpointer should load and save.
+    """Build the configuration that selects a conversation.
 
-    Every read and write goes through this. Same thread_id, same conversation,
-    across restarts. A new one starts blank.
+    Args:
+        thread_id: Stable identifier for one conversation.
+
+    Returns:
+        LangGraph configuration that tells the checkpointer which thread to
+        load and save. Reusing the ID resumes that conversation; a new ID
+        starts with empty state.
     """
     return {"configurable": {"thread_id": thread_id}}
 
 
 def next_empty_thread() -> str:
-    """Find an unused thread name, so a new conversation is always blank."""
+    """Find the first numbered thread that has no saved messages.
+
+    Returns:
+        An unused thread ID such as ``chat-2`` so a new conversation starts
+        with empty short-term memory.
+    """
     n = 1
     while graph.get_state(thread_config(f"chat-{n}")).values.get("messages"):
         n += 1
