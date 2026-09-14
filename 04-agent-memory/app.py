@@ -147,6 +147,12 @@ profile = store.search(NAMESPACE, limit=100)
 
 st.title("Chatbot with a memory")
 
+# ``End conversation`` sets this message immediately before switching threads.
+# Showing it after the rerun makes the handoff from distillation to a new
+# conversation visible instead of hiding it inside the button click.
+if memory_event := st.session_state.pop("memory_event", None):
+    st.success(memory_event)
+
 for message in messages:
     if message.type in ("human", "ai") and message.content:
         with st.chat_message("user" if message.type == "human" else "assistant"):
@@ -169,15 +175,29 @@ if prompt := st.chat_input("Tell it something about yourself"):
 
 
 with st.sidebar:
+    st.subheader("What the next reply loads")
+    st.markdown(
+        f"""
+1. **Checkpointer → state:** restored `{len(messages)}` messages from
+   thread `{st.session_state.thread}`.
+2. **Store → profile:** loaded `{len(profile)}` durable facts for user
+   `{USER_ID}`.
+3. **Agent:** combines both when the next message arrives.
+"""
+    )
+
+    st.divider()
+
     st.subheader("Short-term")
     st.caption(f"thread `{st.session_state.thread}` — {len(messages)} messages")
-    st.caption("Resent to the model every turn, so every turn costs more.")
+    st.caption("Restored by the checkpointer and resent to the model every turn.")
     st.json([{"role": m.type, "content": m.content} for m in messages], expanded=False)
 
     st.divider()
 
     st.subheader("Long-term")
     st.caption(f"user `{USER_ID}` — {len(profile)} facts, carried into every conversation")
+    st.caption("Loaded from the Store and added to the system prompt for every reply.")
     for item in profile:
         st.markdown(f"- {item.value['fact']}")
     if not profile:
@@ -188,15 +208,31 @@ with st.sidebar:
     if st.button(
         "End conversation", disabled=not messages, use_container_width=True, type="primary"
     ):
-        updated = distill(llm, messages, [item.value["fact"] for item in profile])
+        with st.status("Distilling this conversation...", expanded=True) as status:
+            st.write(f"Reading {len(messages)} messages from this thread.")
+            st.write(f"Combining them with {len(profile)} existing profile facts.")
+            updated = distill(llm, messages, [item.value["fact"] for item in profile])
 
-        # An empty result means the model returned nothing usable. Skip the
-        # write rather than erasing a profile built from real conversations.
-        if updated:
-            remember(store, NAMESPACE, updated)
-            st.toast(f"{len(messages)} messages → {len(updated)} facts")
+            # An empty result means the model returned nothing usable. Skip the
+            # write rather than erasing a profile built from real conversations.
+            if updated:
+                remember(store, NAMESPACE, updated)
+                st.write(f"Saved {len(updated)} replacement facts to the Store.")
+                status.update(label="Long-term memory updated", state="complete")
+                result = f"saved {len(updated)} profile facts"
+            else:
+                st.write("No durable facts found, so the existing profile was kept.")
+                status.update(label="No profile changes needed", state="complete")
+                result = "kept the existing profile"
 
-        st.session_state.thread = next_empty_thread()
+        previous_thread = st.session_state.thread
+        new_thread = next_empty_thread()
+        st.session_state.thread = new_thread
+        st.session_state.memory_event = (
+            f"Distilled {len(messages)} messages from {previous_thread}, {result}, and "
+            f"started empty thread {new_thread}. The Store profile will be loaded for "
+            "every reply in this new conversation."
+        )
         st.rerun()
 
     st.caption("Distills this conversation into the profile above, then starts a fresh one.")

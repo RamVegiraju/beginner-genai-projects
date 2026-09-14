@@ -14,6 +14,41 @@ its memory moved to disk.
 | **Written** | every graph super-step, automatically | once, when a conversation ends |
 | **Grows** | forever | barely |
 
+## State, checkpointer, and store
+
+These three terms work together, but they are not the same thing:
+
+| Term | Beginner definition | In this sample |
+|---|---|---|
+| **State** | The working data moving through the graph right now. Nodes read it and return updates to it. | `MessagesState` contains the current thread's message list. |
+| **Checkpointer** | The automatic save-and-load system for state. It organizes saved snapshots by `thread_id`. | `SqliteSaver` saves the conversation after each super-step and restores its latest state when that thread continues. |
+| **Store** | A separate place for information that should be available outside one thread. The app chooses what to read and write. | `SqliteStore` keeps a small profile under `user_id`, so facts can be reused in new conversations. |
+
+A normal turn looks like this:
+
+```text
+new message + thread_id
+        ↓
+checkpointer restores the thread's latest state
+        ↓
+agent reads the user profile from the store
+        ↓
+model answers using the messages and profile
+        ↓
+checkpointer saves the updated state
+```
+
+The checkpointer does not decide what is important or make the conversation
+smaller. It preserves graph state. The store also does not update itself: this
+sample explicitly calls the model to distill durable facts and then writes
+those facts to the store.
+
+The app makes this flow visible instead of asking you to trust hidden code.
+The sidebar reports how many thread messages the checkpointer restored and how
+many profile facts the store loaded for the next reply. When you end a
+conversation, a status panel shows the distillation call and Store update. The
+new thread then confirms what was saved and that its message history is empty.
+
 ## What this sample showcases
 
 **1. A checkpointer replaces the manually managed message list.** LangGraph
