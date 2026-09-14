@@ -40,7 +40,7 @@ DB = str(Path(__file__).parent / "memory.db")
 
 
 @st.cache_resource
-def build() -> tuple[CompiledStateGraph, SqliteStore, ChatOpenAI]:
+def build() -> tuple[CompiledStateGraph, SqliteSaver, SqliteStore, ChatOpenAI]:
     """Build and cache the model, memory backends, and graph.
 
     Streamlit reruns this file after every interaction. ``st.cache_resource``
@@ -48,7 +48,8 @@ def build() -> tuple[CompiledStateGraph, SqliteStore, ChatOpenAI]:
     on every rerun.
 
     Returns:
-        The compiled graph, long-term memory store, and chat model client.
+        The compiled graph, short-term memory checkpointer, long-term memory
+        store, and chat model client.
     """
     w = WorkspaceClient(profile=PROFILE)
     token = w.config.authenticate()["Authorization"].removeprefix("Bearer ")
@@ -103,10 +104,10 @@ def build() -> tuple[CompiledStateGraph, SqliteStore, ChatOpenAI]:
         .add_edge(START, "agent")
         .compile(checkpointer=checkpointer, store=store)
     )
-    return graph, store, llm
+    return graph, checkpointer, store, llm
 
 
-graph, store, llm = build()
+graph, checkpointer, store, llm = build()
 
 
 def thread_config(thread_id: str) -> RunnableConfig:
@@ -123,26 +124,101 @@ def thread_config(thread_id: str) -> RunnableConfig:
     return {"configurable": {"thread_id": thread_id}}
 
 
-def next_empty_thread() -> str:
-    """Find the first numbered thread that has no saved messages.
+def saved_thread_ids(checkpointer: SqliteSaver) -> list[str]:
+    """List every conversation ID currently known to the checkpointer.
+
+    One thread has many checkpoints, so the IDs returned by ``list(None)`` are
+    deduplicated. Only root-graph checkpoints are included; this sample has no
+    subgraphs, but the namespace check keeps the intent explicit.
+
+    Args:
+        checkpointer: SQLite checkpointer that stores conversation state.
+
+    Returns:
+        Sorted thread IDs discovered from saved checkpoints.
+    """
+    return sorted(
+        {
+            str(checkpoint.config["configurable"]["thread_id"])
+            for checkpoint in checkpointer.list(None)
+            if checkpoint.config["configurable"].get("checkpoint_ns", "") == ""
+        }
+    )
+
+
+def next_empty_thread(existing_thread_ids: list[str]) -> str:
+    """Create the first numbered thread ID that is not already in use.
+
+    Args:
+        existing_thread_ids: Thread IDs already saved or currently selected.
 
     Returns:
         An unused thread ID such as ``chat-2`` so a new conversation starts
         with empty short-term memory.
     """
+    existing = set(existing_thread_ids)
     n = 1
-    while graph.get_state(thread_config(f"chat-{n}")).values.get("messages"):
+    while f"chat-{n}" in existing:
         n += 1
     return f"chat-{n}"
+
+
+def open_selected_thread() -> None:
+    """Make the thread chosen in the sidebar the active conversation.
+
+    Streamlit runs this callback before rerunning the page, so every state read
+    later in the script uses the newly selected ``thread_id``.
+    """
+    selected_thread = st.session_state.thread_picker
+    st.session_state.thread = selected_thread
+    st.session_state.memory_event = (
+        f"Opened {selected_thread}. The checkpointer restored only this thread's latest state."
+    )
 
 
 if "thread" not in st.session_state:
     st.session_state.thread = "chat-1"
 
+# Discover saved conversations from the checkpointer instead of maintaining a
+# second, hard-coded thread list. Include the selected thread because a brand-
+# new empty thread has no checkpoint yet and therefore is not returned by list.
+thread_options = sorted(set(saved_thread_ids(checkpointer)) | {st.session_state.thread})
+
+# Buttons change the active thread programmatically. Synchronize the selector
+# before recreating its widget; Streamlit does not allow changing a widget's
+# state after that widget has already rendered during the same run.
+if st.session_state.pop("sync_thread_picker", False) or (
+    st.session_state.get("thread_picker") not in thread_options
+):
+    st.session_state.thread_picker = st.session_state.thread
+
+with st.sidebar:
+    st.subheader("Conversations")
+    st.selectbox(
+        "Open a thread",
+        thread_options,
+        index=thread_options.index(st.session_state.thread),
+        key="thread_picker",
+        on_change=open_selected_thread,
+        help="Selecting an ID reloads only that thread's latest checkpoint.",
+    )
+
+    if st.button("Start new empty thread", use_container_width=True):
+        new_thread = next_empty_thread(thread_options)
+        st.session_state.thread = new_thread
+        st.session_state.sync_thread_picker = True
+        st.session_state.memory_event = (
+            f"Started {new_thread} with empty conversation state. Long-term "
+            "profile facts remain available from the Store."
+        )
+        st.rerun()
+
 config = thread_config(st.session_state.thread)
 
 # Both memories are read from the database, not from st.session_state.
-messages = graph.get_state(config).values.get("messages", [])
+snapshot = graph.get_state(config)
+messages = snapshot.values.get("messages", [])
+checkpoint_history = list(graph.get_state_history(config))
 profile = store.search(NAMESPACE, limit=100)
 
 st.title("Chatbot with a memory")
@@ -191,7 +267,24 @@ with st.sidebar:
     st.subheader("Short-term")
     st.caption(f"thread `{st.session_state.thread}` — {len(messages)} messages")
     st.caption("Restored by the checkpointer and resent to the model every turn.")
+    st.caption(f"{len(checkpoint_history)} state snapshots belong to this thread only.")
     st.json([{"role": m.type, "content": m.content} for m in messages], expanded=False)
+
+    with st.expander("Checkpoint history", expanded=False):
+        if checkpoint_history:
+            st.caption("Newest snapshot first. Switching threads replaces this list.")
+            for saved_snapshot in checkpoint_history[:10]:
+                checkpoint_id = saved_snapshot.config["configurable"].get("checkpoint_id", "")
+                step = (saved_snapshot.metadata or {}).get("step", "input")
+                saved_messages = saved_snapshot.values.get("messages", [])
+                st.code(
+                    f"step {step} | {len(saved_messages)} messages | {checkpoint_id}",
+                    language=None,
+                )
+            if len(checkpoint_history) > 10:
+                st.caption(f"Showing 10 of {len(checkpoint_history)} snapshots.")
+        else:
+            st.caption("No checkpoints yet. Send a message to create them.")
 
     st.divider()
 
@@ -226,8 +319,9 @@ with st.sidebar:
                 result = "kept the existing profile"
 
         previous_thread = st.session_state.thread
-        new_thread = next_empty_thread()
+        new_thread = next_empty_thread(thread_options)
         st.session_state.thread = new_thread
+        st.session_state.sync_thread_picker = True
         st.session_state.memory_event = (
             f"Distilled {len(messages)} messages from {previous_thread}, {result}, and "
             f"started empty thread {new_thread}. The Store profile will be loaded for "

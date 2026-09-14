@@ -49,6 +49,12 @@ many profile facts the store loaded for the next reply. When you end a
 conversation, a status panel shows the distillation call and Store update. The
 new thread then confirms what was saved and that its message history is empty.
 
+The **Open a thread** selector is also built from IDs discovered in the
+checkpointer—there is no hard-coded conversation list. Selecting an older ID
+calls `graph.get_state(...)` for that thread, redraws only its messages, and
+shows only its checkpoint history. Sending another message then continues that
+same thread from its latest state.
+
 ## What this sample showcases
 
 **1. A checkpointer replaces the manually managed message list.** LangGraph
@@ -110,10 +116,14 @@ This new conversation has no message history — and you get vegetarian ideas
 for Seattle. Short-term memory stayed with the previous thread; long-term
 memory came along.
 
-**4. Restart the server.** Everything is still there. It is a SQLite file,
-not a variable in RAM.
+**4. Reopen the previous thread.** Choose its ID under **Open a thread**. Its
+old transcript and checkpoint count return. Send another message and it is
+appended to that conversation—not to the newer thread.
 
-**5. Change your mind.**
+**5. Restart the server.** The saved threads and profile are still there. They
+live in SQLite, not in a Python variable.
+
+**6. Change your mind.**
 
 ```
 Actually I moved to Denver last month.
@@ -143,6 +153,11 @@ One file, `memory.db`, holds both kinds of memory. Stop the app and delete that
 file to make the demo forget everything. A production app would replace the
 SQLite implementations with a production database, while keeping the same
 `thread_id` and `user_id` concepts.
+
+## References
+
+- [LangGraph checkpointers](https://docs.langchain.com/oss/python/langgraph/checkpointers)
+- [Official `SqliteSaver` source](https://github.com/langchain-ai/langgraph/blob/main/libs/checkpoint-sqlite/langgraph/checkpoint/sqlite/__init__.py)
 
 ## Next
 
