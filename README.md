@@ -7,6 +7,23 @@ APIs.
 Every sample is intentionally small enough to read in one sitting. No
 framework magic before you've seen the thing it's hiding.
 
+## Watch the series
+
+Prefer to learn by following along? Watch the complete
+[Applied AI Engineering Beginner Series on YouTube](https://www.youtube.com/playlist?list=PLOR4-dEcH4aA),
+then use this repository as the code companion.
+
+| Video | Code companion |
+|---|---|
+| [Applied AI Engineering Roadmap \| 2026](https://www.youtube.com/watch?v=79FlS1Dy0kI&list=PLOR4-dEcH4aA) | Start with the repository overview below. |
+| [Your First LLM API Call in Python \| AI Engineering Project #1](https://www.youtube.com/watch?v=1wc4QVDD08s&list=PLOR4-dEcH4aA) | [01-first-llm-call](01-first-llm-call/) |
+| [Open Source vs Closed Source LLMs Explained \| AI Engineering #2](https://www.youtube.com/watch?v=MIwta-jRMQs&list=PLOR4-dEcH4aA) | Background concepts used throughout the series. |
+| [Build Your First AI Chatbot with Streamlit \| AI Engineering Project #3](https://www.youtube.com/watch?v=PQUxN9ErhzI&list=PLOR4-dEcH4aA) | [02-streamlit-chatbot](02-streamlit-chatbot/) |
+| [What is an AI Agent & Agent Framework? \| AI Engineering Project #4](https://www.youtube.com/watch?v=uRDP5PUhNA4&list=PLOR4-dEcH4aA) | [03-langgraph-agent](03-langgraph-agent/) |
+| [LangChain vs LangGraph vs Deep Agents Explained \| AI Engineering Project #5](https://www.youtube.com/watch?v=-sZHOqbh3hA&list=PLOR4-dEcH4aA) | [03-langgraph-agent](03-langgraph-agent/) |
+| [Building Your First Agent with LangGraph \| AI Engineering Project #6](https://www.youtube.com/watch?v=rUfBxNpfYXw&list=PLOR4-dEcH4aA) | [03-langgraph-agent](03-langgraph-agent/) |
+| [Building RAG Workflows \| AI Engineering Project #7](https://www.youtube.com/watch?v=d-hk9IpKZiI&list=PLOR4-dEcH4aA) | [04-rag](04-rag/) |
+
 ## The arc
 
 Each sample exists because the previous one hit a wall.
