@@ -131,7 +131,7 @@ Two Streamlit details worth knowing, because they surprise people:
 Resending the list is the cheapest memory there is: it lives in RAM, it only
 grows, and it treats every message as equally worth keeping.
 
-[Sample 4](../04-agent-memory/) replaces it with two that last — the
+[Sample 5](../05-agent-memory/) replaces it with two that last — the
 conversation saved to disk under a `thread_id`, and a short profile of the
 user distilled from it and carried into every future chat. First,
 [sample 3](../03-langgraph-agent/) gives the model tools so it can do more

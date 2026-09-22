@@ -1,4 +1,4 @@
-# 6 — Evaluating with MLflow
+# 7 — Evaluating with MLflow
 
 "It seems good" is not a quality bar. This sample measures a LangChain agent
 instead of guessing at it, using Databricks-managed MLflow.
@@ -41,8 +41,8 @@ block:
 
 ```bash
 export DATABRICKS_PROFILE=genai-series   # once per terminal
-uv pip install --python .venv/bin/python -r 06-mlflow-evals/requirements.txt
-cd 06-mlflow-evals
+uv pip install --python .venv/bin/python -r 07-mlflow-evals/requirements.txt
+cd 07-mlflow-evals
 ../.venv/bin/python app.py
 ```
 
@@ -50,7 +50,7 @@ Open the experiment it prints. You will see the model call, the tool call with
 its arguments and result, and the tokens it cost. **Do this before scoring
 anything** — you cannot debug what you cannot see.
 
-Then score the agent — same terminal, still inside `06-mlflow-evals`:
+Then score the agent — same terminal, still inside `07-mlflow-evals`:
 
 ```bash
 ../.venv/bin/python evaluate.py

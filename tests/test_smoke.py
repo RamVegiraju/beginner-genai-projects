@@ -9,9 +9,10 @@ SAMPLES = [
     ROOT / "01-first-llm-call" / "invoke.py",
     ROOT / "02-streamlit-chatbot" / "app.py",
     ROOT / "03-langgraph-agent" / "weather_tool.py",
-    ROOT / "04-agent-memory" / "app.py",
-    ROOT / "05-fastapi-server" / "server.py",
-    ROOT / "06-mlflow-evals" / "app.py",
+    ROOT / "04-rag" / "rag.py",
+    ROOT / "05-agent-memory" / "app.py",
+    ROOT / "06-fastapi-server" / "server.py",
+    ROOT / "07-mlflow-evals" / "app.py",
 ]
 
 
@@ -53,7 +54,7 @@ def test_every_sample_allows_ambient_authentication():
 
 
 def test_distillation_replaces_the_profile():
-    distill = load_module("sample_distill", ROOT / "04-agent-memory" / "distill.py")
+    distill = load_module("sample_distill", ROOT / "05-agent-memory" / "distill.py")
 
     class Store:
         def __init__(self):
@@ -78,6 +79,22 @@ def test_distillation_replaces_the_profile():
 
 
 def test_mlflow_sample_declares_autologging_dependencies():
-    requirements = (ROOT / "06-mlflow-evals" / "requirements.txt").read_text().splitlines()
+    requirements = (ROOT / "07-mlflow-evals" / "requirements.txt").read_text().splitlines()
     assert any(line.startswith("langchain>=") for line in requirements)
     assert any(line.startswith("mlflow[databricks]>=3.15.1") for line in requirements)
+
+
+def test_rag_sample_indexes_a_local_source():
+    source = ROOT / "04-rag" / "traveler-guide.md"
+    code = (ROOT / "04-rag" / "rag.py").read_text()
+    requirements = (ROOT / "04-rag" / "requirements.txt").read_text().splitlines()
+
+    assert source.is_file()
+    assert "RecursiveCharacterTextSplitter" in code
+    assert "InMemoryVectorStore" in code
+    assert "embed_query" in code
+    assert "similarity_search_with_score_by_vector" in code
+    assert "[RETRIEVED]" in code
+    assert "VectorSearch" not in code
+    assert '"RAG_QUESTION"' in code
+    assert any(line.startswith("numpy>=") for line in requirements)

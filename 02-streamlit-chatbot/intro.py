@@ -88,7 +88,7 @@ right.metric("Button presses", st.session_state.count)
 # Anything inside `with st.sidebar:` renders in the left panel instead.
 with st.sidebar:
     st.header("The sidebar")
-    st.write("Everything inside `with st.sidebar:` lands here. Sample 4 uses it for memory.")
+    st.write("Everything inside `with st.sidebar:` lands here. Sample 5 uses it for memory.")
 
 st.divider()
 

@@ -1,6 +1,6 @@
-# 5 — Serving the agent with FastAPI
+# 6 — Serving the agent with FastAPI
 
-Samples 2 and 4 ran your agent for one person, in one browser tab. This puts
+Samples 2 and 5 ran your agent for one person, in one browser tab. This puts
 the LangGraph agent behind an HTTP API, so anything can call it — a web app, a
 job, another service.
 
@@ -36,8 +36,8 @@ block:
 
 ```bash
 export DATABRICKS_PROFILE=genai-series   # once per terminal
-uv pip install --python .venv/bin/python -r 05-fastapi-server/requirements.txt
-cd 05-fastapi-server
+uv pip install --python .venv/bin/python -r 06-fastapi-server/requirements.txt
+cd 06-fastapi-server
 ../.venv/bin/uvicorn server:app
 ```
 
@@ -45,7 +45,7 @@ cd 05-fastapi-server
 this one only talks to your local server:
 
 ```bash
-cd 05-fastapi-server
+cd 06-fastapi-server
 ../.venv/bin/python load_test.py
 ```
 
@@ -148,4 +148,4 @@ four times.
 ## Next
 
 The server works. But is the agent any *good*? Measuring answer quality
-instead of guessing at it is [sample 6](../06-mlflow-evals/).
+instead of guessing at it is [sample 7](../07-mlflow-evals/).

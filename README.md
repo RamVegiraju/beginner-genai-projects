@@ -1,6 +1,6 @@
 # Beginner GenAI Series
 
-Six small, self-contained samples that take you from "how do I call an LLM?"
+Seven small, self-contained samples that take you from "how do I call an LLM?"
 to "how do I serve and evaluate an agent?" — using Databricks Foundation Model
 APIs.
 
@@ -16,9 +16,10 @@ Each sample exists because the previous one hit a wall.
 | 1 | [Talking to an LLM](01-first-llm-call/) | How do you call a model at all? Streaming vs non-streaming. |
 | 2 | [Streamlit chatbot](02-streamlit-chatbot/) | One question isn't a conversation, and a script isn't a product. |
 | 3 | [LangChain → LangGraph agent](03-langgraph-agent/) | Start with a tool-calling agent, then add a custom review loop. |
-| 4 | [Memory](04-agent-memory/) | Close the tab and it forgets you. Persist the conversation, and distill what's worth keeping about the person. |
-| 5 | [FastAPI server](05-fastapi-server/) | One user at a time doesn't scale. Serve many at once. |
-| 6 | [MLflow evals](06-mlflow-evals/) | "It seems good" isn't a quality bar. Measure it. |
+| 4 | [RAG](04-rag/) | A tool can fetch live facts, but the model still cannot know your private documents. Retrieve the relevant evidence. |
+| 5 | [Memory](05-agent-memory/) | Close the tab and it forgets you. Persist the conversation, and distill what's worth keeping about the person. |
+| 6 | [FastAPI server](06-fastapi-server/) | One user at a time doesn't scale. Serve many at once. |
+| 7 | [MLflow evals](07-mlflow-evals/) | "It seems good" isn't a quality bar. Measure it. |
 
 ## Status
 
@@ -28,8 +29,9 @@ Each sample exists because the previous one hit a wall.
 - **Sample 4 — built and tested** against a live workspace.
 - **Sample 5 — built and tested** against a live workspace.
 - **Sample 6 — built and tested** against a live workspace.
+- **Sample 7 — built and tested** against a live workspace.
 
-All six samples are complete.
+All seven samples are implemented.
 
 ## Setup
 
@@ -79,16 +81,21 @@ set -a; source .env; set +a
 | Variable | Required? | Meaning |
 |---|---|---|
 | `SERVING_ENDPOINT` | No; defaults to `databricks-claude-haiku-4-5` | A different ready chat endpoint |
+| `EMBEDDING_ENDPOINT` | No; defaults to `databricks-gte-large-en` | A different ready embedding endpoint (sample 4) |
+| `RAG_DOCUMENT` | No; defaults to the checked-in guide | A guide stored in a Unity Catalog Volume (sample 4) |
+| `RAG_QUESTION` | No; has a built-in example question | A different question for the RAG guide (sample 4) |
 | `DATABRICKS_PROFILE` | Yes, unless credentials come from elsewhere | A named CLI profile. Omit it only where the environment already supplies credentials. |
-| `USER_ID` | No; defaults to `demo-user` | Who long-term memory belongs to (sample 4) |
+| `USER_ID` | No; defaults to `demo-user` | Who long-term memory belongs to (sample 5) |
 
 If Haiku is unavailable in your workspace, [SETUP.md](SETUP.md) shows how to
 choose another endpoint.
 
 ## Last validated
 
-All six samples were exercised against an Azure Databricks workspace on
-August 25, 2026, using Python 3.12.13. Key resolved versions were
+Samples 1–3 and 5–7 were exercised against an Azure Databricks workspace on
+August 25, 2026. Sample 4 was exercised on September 22, 2026 using a guide in
+an existing Unity Catalog Volume and local in-memory vector search. Python
+3.12 was used throughout. Key resolved versions for the original samples were
 Databricks SDK 0.133.0, OpenAI 3.2.0, LangGraph 1.2.11, FastAPI 0.141.1, and
 MLflow 3.15.1. The requirements specify supported minimums rather than tying
 the series to that one workspace or environment.

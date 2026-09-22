@@ -121,5 +121,6 @@ Databricks-backed `ChatOpenAI` model. Read the two agent files first.
 
 ## Next
 
-This state lasts for only one run. [Sample 4](../04-agent-memory/) adds memory
-that survives across conversations.
+The weather tool can fetch live public data, but the model still cannot know a
+private traveler guide. [Sample 4](../04-rag/) adds retrieval-augmented
+generation so answers can use relevant passages from documents.

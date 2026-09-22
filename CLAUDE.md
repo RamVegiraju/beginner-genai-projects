@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A six-part teaching series on Databricks Foundation Model APIs. Each sample is
+A seven-part teaching series on Databricks Foundation Model APIs. Each sample is
 self-contained and deliberately minimal — sample N exists because sample N-1 hit a
 wall (see the arc table in `README.md`). Brevity is a feature: prefer deleting code
 over adding a case.
@@ -25,18 +25,21 @@ uv pip install --python .venv/bin/python -r 0N-sample/requirements.txt
 
 # then, from inside the sample directory
 cd 03-langgraph-agent && ../.venv/bin/python simple_agent.py && ../.venv/bin/python agent.py
-cd 02-streamlit-chatbot && ../.venv/bin/streamlit run app.py   # also 04
-cd 05-fastapi-server && ../.venv/bin/uvicorn server:app        # then: python load_test.py
-cd 06-mlflow-evals && ../.venv/bin/python evaluate.py
+cd 04-rag && ../.venv/bin/python rag.py
+cd 02-streamlit-chatbot && ../.venv/bin/streamlit run app.py   # also 05
+cd 06-fastapi-server && ../.venv/bin/uvicorn server:app        # then: python load_test.py
+cd 07-mlflow-evals && ../.venv/bin/python evaluate.py
 ```
 
-Samples 2 and 4 are Streamlit; drive them headlessly with `streamlit.testing.v1.AppTest`
+Samples 2 and 5 are Streamlit; drive them headlessly with `streamlit.testing.v1.AppTest`
 (`AppTest.from_file(path, default_timeout=120)` — the 3s default is too short for model
 calls).
 
 Optional env vars: `SERVING_ENDPOINT` (defaults to `databricks-claude-haiku-4-5`),
-`DATABRICKS_PROFILE` (otherwise SDK ambient auth), `USER_ID` (sample 4), and
-`MLFLOW_EXPERIMENT_NAME` (sample 6).
+`EMBEDDING_ENDPOINT` (sample 4, defaults to `databricks-gte-large-en`),
+`RAG_DOCUMENT` (sample 4, local path or `/Volumes/...`), `DATABRICKS_PROFILE`
+(otherwise SDK ambient auth), `USER_ID` (sample 5), and `MLFLOW_EXPERIMENT_NAME`
+(sample 7).
 
 ## Architecture
 
@@ -55,14 +58,15 @@ from `databricks-langchain` would be more idiomatic but is **broken in this envi
 (importing it raises `cannot import name 'RequestContext' from 'mcp.shared.context'`).
 
 **Framework progression:** samples 1–2 use the raw OpenAI SDK on purpose, to show the
-thing the framework hides. Sample 3 introduces LangGraph, and **everything after it uses
-LangGraph** — don't reintroduce hand-rolled tool loops.
+thing the framework hides. Sample 3 introduces LangChain agents and LangGraph. Sample 4
+uses LangChain directly because deterministic retrieval does not need an agent loop;
+samples 5–7 return to LangGraph. Don't introduce hand-rolled tool loops.
 
 Samples never import from each other. Each has its own `requirements.txt`.
 
 ## Gotchas that have cost real time here
 
-- **Sample 6 requires `databricks-agents`.** Built-in judges live there. Without it every
+- **Sample 7 requires `databricks-agents`.** Built-in judges live there. Without it every
   scorer fails with `No module named 'databricks.agents'` while `evaluate()` still prints
   success and returns empty metrics.
 - **MLflow's eval harness calls `predict_fn` from ~10 threads.** Mint one token in
@@ -71,7 +75,7 @@ Samples never import from each other. Each has its own `requirements.txt`.
 - **`ToolCallCorrectness` finds tools via `span_type=SpanType.TOOL`.** Without that span
   type it sees an agent that never used a tool. `langchain.autolog()` emits them; disable
   it and `grounded_in_lookup` silently drops to 0.00.
-- **Sample 6 stalls before scoring roughly one run in three**, stuck at `0/10`. Cause not
+- **Sample 7 stalls before scoring roughly one run in three**, stuck at `0/10`. Cause not
   understood; kill and re-run. `MLFLOW_GENAI_EVAL_SKIP_TRACE_VALIDATION` is already set and
   is *not* the fix for this.
 - **LangChain wraps tool returns in a ToolMessage.** Span outputs look like

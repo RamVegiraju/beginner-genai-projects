@@ -1,4 +1,4 @@
-# 4 — Memory
+# 5 — Memory
 
 Sample 2's chatbot kept the conversation in Streamlit session state, so ending
 that session or restarting the server erased it. This is the same chatbot with
@@ -82,8 +82,8 @@ Open a terminal at the repo root and paste the whole block:
 
 ```bash
 export DATABRICKS_PROFILE=genai-series   # once per terminal
-uv pip install --python .venv/bin/python -r 04-agent-memory/requirements.txt
-cd 04-agent-memory
+uv pip install --python .venv/bin/python -r 05-agent-memory/requirements.txt
+cd 05-agent-memory
 ../.venv/bin/streamlit run app.py
 ```
 
@@ -162,4 +162,4 @@ SQLite implementations with a production database, while keeping the same
 ## Next
 
 This serves one user, in one process, at a time. Making it handle many at once
-is [sample 5](../05-fastapi-server/).
+is [sample 6](../06-fastapi-server/).
