@@ -82,6 +82,7 @@ Open a terminal at the repo root and paste the whole block:
 
 ```bash
 export DATABRICKS_PROFILE=genai-series   # once per terminal
+export SERVING_ENDPOINT=databricks-gpt-5-4-mini
 uv pip install --python .venv/bin/python -r 05-agent-memory/requirements.txt
 cd 05-agent-memory
 ../.venv/bin/streamlit run app.py
@@ -153,6 +154,31 @@ One file, `memory.db`, holds both kinds of memory. Stop the app and delete that
 file to make the demo forget everything. A production app would replace the
 SQLite implementations with a production database, while keeping the same
 `thread_id` and `user_id` concepts.
+
+## Latest live validation
+
+On October 1, 2026, this sample was exercised against an AWS Databricks
+workspace using `databricks-gpt-5-4-mini`. Streamlit's headless `AppTest`
+drove the chat input, End conversation button, and thread selector using an
+isolated SQLite database and live model calls.
+
+- Ending the first conversation saved three facts: vegetarian, Seattle, and
+  a preference for short answers. The new thread started with zero messages.
+- Asking what to cook in the new thread produced vegetarian meal ideas.
+- Reopening the first thread restored its original two messages.
+- Correcting the location to Denver and ending the conversation replaced
+  Seattle while retaining the other two facts.
+- A fresh Python process restored both saved threads, four messages in the
+  original thread, and the updated three-fact profile.
+
+The conversation flow took 6.3 seconds in that run; restart verification was
+separate. A second headless run after adding the on-screen instructions and
+removing the thread selector's duplicate default completed in 6.8 seconds,
+with no app exceptions or duplicate-default warning. Ruff and all five
+repository smoke tests passed. These are individual observations, not a latency benchmark.
+The rendered browser UI was not visually reviewed because Computer Use
+permissions were unavailable. Headless interaction checks verify behavior,
+but do not establish visual usability.
 
 ## References
 

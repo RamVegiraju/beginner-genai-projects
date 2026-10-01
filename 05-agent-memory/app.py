@@ -197,7 +197,6 @@ with st.sidebar:
     st.selectbox(
         "Open a thread",
         thread_options,
-        index=thread_options.index(st.session_state.thread),
         key="thread_picker",
         on_change=open_selected_thread,
         help="Selecting an ID reloads only that thread's latest checkpoint.",
@@ -222,6 +221,10 @@ checkpoint_history = list(graph.get_state_history(config))
 profile = store.search(NAMESPACE, limit=100)
 
 st.title("Chatbot with a memory")
+st.caption(
+    "Tell me about yourself, then click End conversation to save useful profile facts. "
+    "Your next chat starts fresh and uses those facts. Reopen saved chats under Open a thread."
+)
 
 # ``End conversation`` sets this message immediately before switching threads.
 # Showing it after the rerun makes the handoff from distillation to a new
